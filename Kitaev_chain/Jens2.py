@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from scipy import sparse
 from scipy.stats import unitary_group
 import itertools
-
+import matplotlib.pyplot as plt
 
 
 
@@ -144,8 +144,25 @@ def Ham_bdg(L, t, delta, mu):
     tau = -(t * sigma[3] + 1j * delta * sigma[2])
     H = np.kron(tau, n_offdiag_tot)
     H = H + np.conj(H.T) - mu * np.kron(sigma[3], n_diag_tot)
-    print(H)
-    return H
+
+    return 0.5 * H
+
+
+def ManyBodySpectrum(E):
+    spectrum =[]
+    comb_list = []
+    combinations = itertools.product([-1, 1], repeat=len(E))
+    for i in combinations:
+        print(i)
+        spectrum.append(np.dot(E, np.array(i)))
+
+    energy = np.array(spectrum)
+    idx = energy.argsort()  # Indexes from lower to higher energy
+    energy = energy[idx]  # Ordered energy eigenvalues
+    return energy
+
+
+
 
 
 @dataclass
@@ -262,8 +279,9 @@ class model:
 
             # Diagonal terms (mu and V terms)
             H[r, r] += self.V*np.dot(n[:Lhop],np.roll(n,-1)[:Lhop])  # + np.dot(n - 0.5, self.mu*np.ones(L))
-            H[r, r] += - np.dot(n, self.mu*np.ones(L))
-            H[r, r] += np.sum(np.random.uniform(-self.lamb, self.lamb, size=int(np.sum(n))))
+            H[r, r] += -np.dot(n - 0.5, self.mu*np.ones(L))          # - np.dot(n, self.mu*np.ones(L))
+            H[r, r] +=-np.dot(n - 0.5, self.lamb * np.random.uniform(-1, 1, size=L))
+                # np.sum(np.random.uniform(-self.lamb, self.lamb, size=int(np.sum(n))))
 
             # Nearest-neighbour terms
             for i in range(Lhop):
@@ -555,6 +573,32 @@ class model:
             psi = np.zeros((len(self.a2rp), )) if parity=="even" else np.zeros((len(self.a2rm), ))
 
         print("check done for product states with U(1) charge " + str(u1charge))
+
+
+    def check_spectra(self):
+
+        Heven = self.calc_Hamiltonian(parity='even', bc='periodic')
+        Hodd = self.calc_Hamiltonian(parity='odd', bc='periodic')
+        Eeven, Veven = np.linalg.eigh(Heven)
+        Eodd, Vodd = np.linalg.eigh(Hodd)
+        E = np.concatenate((Eeven, Eodd))
+        idx = E.argsort()
+        E = E[idx]
+
+        H2 = Ham_bdg(L, t, Delta, mu)
+        E2 = spectrum(H2)[0]
+        Ep = E2[E2 >= 0]
+        Esp = ManyBodySpectrum(Ep)
+
+        plt.figure()
+        plt.plot(range(len(E)), E, '.y', markersize=15)
+        plt.plot(range(len(Esp)), Esp, '.b', markersize=5)
+        # plt.plot(r, Energy[r], '.r', markersize=6)
+        # plt.ylim(-0.1, 0.1)
+        plt.xlabel("Eigenstate number")
+        plt.ylabel("Energy")
+        plt.title('$H$')
+        plt.show()
 
 
 if __name__ == '__main__':
