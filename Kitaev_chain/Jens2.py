@@ -485,9 +485,10 @@ class model:
         for i, j in itertools.product(range(L), range(L)):
             rho_opdm[i, j] = np.dot(psi.conjugate(), (self.rho['eh'][i, j] * psi))
             rho_opdm[i+L, j] = np.dot(psi.conjugate(), (self.rho['hh'][i, j] * psi))
-        rho_opdm[L: 2*L, L: 2*L] = np.eye(L) - rho_opdm[:L, :L].T
-        rho_opdm[:L, L:2*L] = rho_opdm[L: 2*L, :L].T.conjugate()
-        
+        #rho_opdm[L: 2*L, L: 2*L] = np.eye(L) - rho_opdm[:L, :L].T
+        #rho_opdm[:L, L:2*L] = rho_opdm[L: 2*L, :L].T.conjugate()
+        rho_opdm[L: 2 * L, L: 2 * L] = np.eye(L) - rho_opdm[:L, :L].T.conjugate()
+        rho_opdm[:L, L:2 * L] = - rho_opdm[L: 2 * L, :L].T.conjugate()
         return rho_opdm
 
 
