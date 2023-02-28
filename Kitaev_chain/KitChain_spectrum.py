@@ -11,8 +11,8 @@ Delta = 1                                 # Nearest-neighbour pairing
 Delta2 = 0                                # Next-to-nearest neighbour pairing
 V = 0                                     # Density-density interactions
 mu = 0.01                                 # Chemical potential
-lamb = 0.01                                # Onsite disorder
-L = 4                                     # Length of the chain
+lamb = 0                               # Onsite disorder
+L = 8                                     # Length of the chain
 
 # Pauli matrices
 sigma_x = np.array([[0, 1], [1, 0]])
@@ -39,10 +39,11 @@ Eeven, Veven = np.linalg.eigh(Heven)
 #
 
 # Single particle density matrix
-psi = Veven[:, 1]                                         # Particula eigenstate in the parity sector
+psi = Veven[:, 100]                                         # Particula eigenstate in the parity sector
 psi = psi / np.linalg.norm(psi)
 rho = chain.calc_opdm_from_psi(psi, parity='even')           # Single particle density matrix (BdG x position space)
 values = np.linalg.eigvalsh(rho)
+print(values)
 P = np.zeros((2 * L,))
 P[L:] = 1
 # if np.allclose(spectrum(rho)[0], P, rtol=1e-15):
@@ -52,13 +53,12 @@ P[L:] = 1
 # Occupation numbers (spectrum of rho)
 #
 # # Local chiral marker
-# Id = np.eye(int(L))                                          # Identity in position space
-# S = np.kron(sigma_x, Id)                                     # Chiral symmetry of the chain (BdG x position space)
+#Id = np.eye(int(L))                                          # Identity in position space
+#S = np.kron(sigma_x, Id)                                     # Chiral symmetry of the chain (BdG x position space)
 # marker = np.zeros((L, ))                                     # Definition of the marker vector
 # for i in range(L):
 #     marker[i] = local_marker(L, np.arange(L), rho, S, i)     # Local marker at each site of the chain
 # print(np.mean(marker))
-
 
 
 

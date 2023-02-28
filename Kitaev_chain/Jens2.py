@@ -280,7 +280,7 @@ class model:
             # Diagonal terms (mu and V terms)
             H[r, r] += self.V*np.dot(n[:Lhop],np.roll(n,-1)[:Lhop])  # + np.dot(n - 0.5, self.mu*np.ones(L))
             H[r, r] += -np.dot(n - 0.5, self.mu*np.ones(L))          # - np.dot(n, self.mu*np.ones(L))
-            H[r, r] +=-np.dot(n - 0.5, self.lamb * np.random.uniform(-1, 1, size=L))
+            H[r, r] += -np.dot(n - 0.5, self.lamb * np.random.uniform(-1, 1, size=L))
                 # np.sum(np.random.uniform(-self.lamb, self.lamb, size=int(np.sum(n))))
 
             # Nearest-neighbour terms
