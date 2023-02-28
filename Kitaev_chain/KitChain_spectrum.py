@@ -12,7 +12,7 @@ Delta2 = 0                                # Next-to-nearest neighbour pairing
 V = 0                                     # Density-density interactions
 mu = 0.01                                 # Chemical potential
 lamb = 0                               # Onsite disorder
-L = 7                                     # Length of the chain
+L = 10                                     # Length of the chain
 
 # Pauli matrices
 sigma_x = np.array([[0, 1], [1, 0]])
@@ -39,7 +39,7 @@ Eeven, Veven = np.linalg.eigh(Heven)
 #
 
 # Single particle density matrix
-psi = Veven[:, 15]                                         # Particula eigenstate in the parity sector
+psi = Veven[:, 120]                                         # Particula eigenstate in the parity sector
 psi = psi / np.linalg.norm(psi)
 rho = chain.calc_opdm_from_psi(psi, parity='even')           # Single particle density matrix (BdG x position space)
 values = np.linalg.eigvalsh(rho)
