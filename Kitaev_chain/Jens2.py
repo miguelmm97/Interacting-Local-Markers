@@ -153,7 +153,7 @@ def ManyBodySpectrum(E):
     comb_list = []
     combinations = itertools.product([-1, 1], repeat=len(E))
     for i in combinations:
-        print(i)
+        # print(i)
         spectrum.append(np.dot(E, np.array(i)))
 
     energy = np.array(spectrum)
@@ -223,6 +223,7 @@ class model:
         
         
     def calc_Hamiltonian(self, parity='even', bc='periodic'):
+
         """
         Calculates the Hamiltonian in the even or odd parity sector.
         
@@ -256,9 +257,11 @@ class model:
         if parity == 'even':
             r_to_a = self.rp2a
             a_to_r = self.a2rp
+            self.Hbasis = np.zeros((len(self.a2rp), self.L + 1))
         elif parity == 'odd':
             r_to_a = self.rm2a
             a_to_r = self.a2rm
+            self.Hbasis = np.zeros((len(self.a2rm), self.L + 1))
         else:
             raise ValueError('parity must be "even" or "odd"')
 
@@ -269,19 +272,21 @@ class model:
             Lhop = L-1
             Lhop2 = L-2
         else:
-                raise ValueError('boundary condition must be "periodic" or "open"')
+            raise ValueError('boundary condition must be "periodic" or "open"')
     
 
         # Hamiltonian
         for r in range(dim):
             a = r_to_a[r]
-            n = bin_to_n(a,L)
+            n = bin_to_n(a, L)
+            self.Hbasis[r, :-1] = bin_to_n(a, self.L)
+            self.Hbasis[r, -1] = r
 
             # Diagonal terms (mu and V terms)
-            H[r, r] += self.V*np.dot(n[:Lhop],np.roll(n,-1)[:Lhop])  # + np.dot(n - 0.5, self.mu*np.ones(L))
-            H[r, r] += -np.dot(n - 0.5, self.mu*np.ones(L))          # - np.dot(n, self.mu*np.ones(L))
-            H[r, r] +=-np.dot(n - 0.5, self.lamb * np.random.uniform(-1, 1, size=L))
-                # np.sum(np.random.uniform(-self.lamb, self.lamb, size=int(np.sum(n))))
+            H[r, r] += self.V * np.dot(n[:Lhop], np.roll(n, -1)[:Lhop])  # + np.dot(n - 0.5, self.mu*np.ones(L))
+            H[r, r] += -np.dot(n - 0.5, self.mu * np.ones(L))        # - np.dot(n, self.mu*np.ones(L))
+            H[r, r] += -np.dot(n - 0.5, self.lamb * np.random.uniform(0, 1, size=L))
+                                                 # np.sum(np.random.uniform(-self.lamb, self.lamb, size=int(np.sum(n))))
 
             # Nearest-neighbour terms
             for i in range(Lhop):
@@ -292,7 +297,7 @@ class model:
                 try:
                     b, h = self.hopping(n, i, j)
                     s = a_to_r[b]
-                    ht = -self.t*h
+                    ht = -self.t * h  #* np.random.uniform(-1, 1, size=1)
                     H[s, r] += ht
                     H[r, s] += np.conjugate(ht)
                 except TypeError:
@@ -302,7 +307,7 @@ class model:
                 try:
                     b, h = self.pairing(n, i, j)
                     s = a_to_r[b]
-                    hp = self.Delta * h
+                    hp = self.Delta * h # * np.random.uniform(0, 1, size=1)
                     H[s, r] += hp
                     H[r, s] += np.conjugate(hp)
                 except TypeError:
@@ -461,7 +466,7 @@ class model:
         Calculates the one-particle-density matrix from a state psi.
         
         rho_opdm =  [[ <psi|c^\dagger_i c_j|psi> , <psi|c^\dagger_i c^\dagger_j|psi>],
-                     [ <psi|c_i c_j|psi>,<psi|c_i c^\dagger_j|psi> ]]
+                     [          <psi|c_i c_j|psi>,   <psi|c_i c^\dagger_j|psi> ]]
 
         Parameters
         ----------
@@ -485,8 +490,13 @@ class model:
         for i, j in itertools.product(range(L), range(L)):
             rho_opdm[i, j] = np.dot(psi.conjugate(), (self.rho['eh'][i, j] * psi))
             rho_opdm[i+L, j] = np.dot(psi.conjugate(), (self.rho['hh'][i, j] * psi))
-        rho_opdm[L: 2*L, L: 2*L] = np.eye(L) - rho_opdm[:L, :L].T
+        rho_opdm[L: 2*L, L: 2*L] = np.eye(L) - rho_opdm[:L, :L]  # .T
         rho_opdm[:L, L:2*L] = rho_opdm[L: 2*L, :L].T.conjugate()
+        # for i, j in itertools.product(range(L), range(L)):
+        #     rho_opdm[i, j] = np.dot(psi.conjugate(), (self.rho['eh'][i, j] * psi))
+        #     rho_opdm[i, j+L] = np.dot(psi.conjugate(), (self.rho['hh'][i, j] * psi))
+        # rho_opdm[L: 2*L, L: 2*L] = np.eye(L) - rho_opdm[:L, :L].conj()
+        # rho_opdm[L:2*L, :L] = -rho_opdm[:L, L:2*L].conj()
         
         return rho_opdm
 
@@ -512,6 +522,10 @@ class model:
         print("odd parity basis")
         print("-----------------")
         print(auxm)
+        print("-----------------")
+        print("Hamiltonian basis")
+        print("-----------------")
+        print(self.Hbasis)
 
 
     def show_rho(self, i, j, parity="even"):
@@ -549,9 +563,10 @@ class model:
                         print("State " + str(i) + str(", ") + str(bin_to_n(self.rm2a[i], self.L))
                               + str(" is connected to state ") + str(j) + str(", ")
                               + str(bin_to_n(self.rm2a[j], self.L)) + str(" by hh"))
+        return rho_eh, rho_hh
 
 
-    def check_rho_prodStates(self, parity="even", u1charge="conserved"):
+    def check_rho_prodStates(self, Vodd, parity="even", u1charge="conserved"):
         """
         Checks that the single particle density matrix becomes a projector for any
         product state
@@ -565,9 +580,10 @@ class model:
 
         for i in range(len(psi)):
             psi[i] = 1
-            if u1charge == "conserved": pass             # Random state conserving U(1) charge
-            else: unitary_group.rvs(len(psi)) @ psi      # Random state not conserving U(1) charge
-            rho = self.calc_opdm_from_psi(psi, parity)   # OPDM
+            if u1charge == "conserved": pass               # Random state conserving U(1) charge
+            else: psi = unitary_group.rvs(len(psi)) @ psi  # Random state not conserving U(1) charge
+            rho = self.calc_opdm_from_psi(psi, parity)     # OPDM
+
             if not np.allclose(spectrum(rho)[0], P, rtol=1e-15):
                 raise AssertionError("OPDM not a projector for product states!")
             psi = np.zeros((len(self.a2rp), )) if parity=="even" else np.zeros((len(self.a2rm), ))
@@ -585,7 +601,7 @@ class model:
         idx = E.argsort()
         E = E[idx]
 
-        H2 = Ham_bdg(L, t, Delta, mu)
+        H2 = Ham_bdg(self.L, self.t, self.Delta, self.mu)
         E2 = spectrum(H2)[0]
         Ep = E2[E2 >= 0]
         Esp = ManyBodySpectrum(Ep)

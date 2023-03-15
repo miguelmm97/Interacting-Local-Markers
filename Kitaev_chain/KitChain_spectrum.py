@@ -7,12 +7,12 @@ from Jens2 import model, local_marker, Ham_bdg, spectrum, ManyBodySpectrum
 #%% Parameters
 t = 1                                     # Nearest-neighbour hopping
 t2 = 0                                    # Next-to-nearest neighbour hopping
-Delta = 1                                 # Nearest-neighbour pairing
+Delta = 0                                 # Nearest-neighbour pairing
 Delta2 = 0                                # Next-to-nearest neighbour pairing
 V = 0                                     # Density-density interactions
-mu = 0.01                                 # Chemical potential
-lamb = 0.01                                # Onsite disorder
-L = 4                                     # Length of the chain
+mu = 0                                    # Chemical potential
+lamb = 0.1                                # Onsite disorder
+L = 6                                     # Length of the chain
 
 # Pauli matrices
 sigma_x = np.array([[0, 1], [1, 0]])
@@ -21,37 +21,80 @@ sigma_z = np.array([[1, 0], [0, -1]])
 
 
 #%% Hamiltonian
-chain = model(t, t2, V, mu, Delta, Delta2, lamb, L)          # Kitaev chain with the specified parameters
-Heven = chain.calc_Hamiltonian(parity='even', bc='periodic')     # Hamiltonian on the even parity sector
-Eeven, Veven = np.linalg.eigh(Heven)
 
-
-# Hodd = chain.calc_Hamiltonian(parity='odd', bc='periodic')     # Hamiltonian on the even parity sector
-# Eeven, Veven = np.linalg.eigh(Heven)                            # Spectrum in the even parity sector
-# Eodd, Vodd = np.linalg.eigh(Hodd)                            # Spectrum in the even parity sector
+# Many body calculation
+chain = model(t, t2, V, mu, Delta, Delta2, lamb, L)              # Kitaev chain with the specified parameters
+chain2 = model(t, t2, V, mu, Delta, Delta2, 0, L)
+# Heven = chain.calc_Hamiltonian(parity='even', bc='periodic')     # Hamiltonian on the even parity sector
+# Eeven, Veven = np.linalg.eigh(Heven)
+Hodd = chain.calc_Hamiltonian(parity='odd', bc='periodic')     # Hamiltonian on the odd parity sector
+Eodd, Vodd = np.linalg.eigh(Hodd)                              # Spectrum in the even parity sector
+Hodd2 = chain2.calc_Hamiltonian(parity='odd', bc='periodic')     # Hamiltonian on the odd parity sector
+Eodd2, Vodd2 = np.linalg.eigh(Hodd2)                              # Spectrum in the even parity sector
 # E = np.concatenate((Eeven, Eodd))
 # idx = E.argsort()
 # E = E[idx]
-# H2 = Ham_bdg(L, t, Delta, mu)
-# E2 = spectrum(H2)[0]
+# print("Unitarity Bogoliubov transformation: ", np.allclose(Veven.T.conj() @ Veven, np.eye(Veven.shape[0])))
+print("Unitarity Bogoliubov transformation: ", np.allclose(Vodd.T.conj() @ Vodd, np.eye(Vodd.shape[0])))
+
+
+psi = Vodd[:, 0]
+psi = psi / np.linalg.norm(psi)
+rho = chain.calc_opdm_from_psi(psi, parity='odd')  # Single particle density matrix (BdG x position space)
+values = spectrum(rho)[0]
+
+psi2 = Vodd2[:, 0]
+psi2 = psi2 / np.linalg.norm(psi2)
+rho2 = chain2.calc_opdm_from_psi(psi2, parity='odd')  # Single particle density matrix (BdG x position space)
+values2 = spectrum(rho2)[0]
+
+
+
+
+# Single-particle calculation
+H2 = Ham_bdg(L, t, Delta, mu)
+E2, vecs = spectrum(H2)
 # Ep = E2[E2 >= 0]
 # Esp = ManyBodySpectrum(Ep)
-#
+# chain.check_spectra()
 
-# Single particle density matrix
-psi = Veven[:, 1]                                         # Particula eigenstate in the parity sector
-psi = psi / np.linalg.norm(psi)
-rho = chain.calc_opdm_from_psi(psi, parity='even')           # Single particle density matrix (BdG x position space)
-values = np.linalg.eigvalsh(rho)
+# Single particle density matrix for every eigenstate
+sigma_x = np.array([[0, 1], [1, 0]])
+Id = np.eye(int(L))
+S = np.kron(sigma_x, Id)
 P = np.zeros((2 * L,))
 P[L:] = 1
-# if np.allclose(spectrum(rho)[0], P, rtol=1e-15):
-#     print('Good job!:)')
-# else:
-#     raise AssertionError("OPDM not a projector for product states!")
-# Occupation numbers (spectrum of rho)
-#
-# # Local chiral marker
+for i in range(len(Hodd[0, :])):
+    psi = Vodd[:, i]
+    psi = psi / np.linalg.norm(psi)
+    rho = chain.calc_opdm_from_psi(psi, parity='odd')  # Single particle density matrix (BdG x position space)
+    values = spectrum(rho)[0]
+
+    print("--------")
+    print("State :", i)
+    print("Projector: ", np.allclose(P, values))
+    print("PH Symmetry: ", np.allclose(- S @ rho @ S + np.eye(2 * int(L)), np.conj(rho)))
+    print("Trace: ", np.allclose(np.trace(rho), L))
+    print("Hermiticity: ", np.allclose(rho, np.conj(rho.T)))
+    print("--------")
+
+    # if np.allclose(spectrum(rho)[0], P, rtol=1e-15):
+    #     print('Good job!:)')
+    # else:
+    #     raise AssertionError("OPDM not a projector for product states!")
+
+
+# Single particle density matrix for a particular eigenstate
+# psi = Veven[:, 6]  # Particular eigenstate in the parity sector
+# psi = np.zeros(Vodd.shape[0])
+# psi[5] = 1
+# #psi = psi / np.linalg.norm(psi)
+# rho = chain.calc_opdm_from_psi(psi, parity='odd')  # Single particle density matrix (BdG x position space)
+# values = np.linalg.eigvalsh(rho)
+# print("Projector 1: ", np.allclose(P, values))
+
+
+# Local chiral marker
 # Id = np.eye(int(L))                                          # Identity in position space
 # S = np.kron(sigma_x, Id)                                     # Chiral symmetry of the chain (BdG x position space)
 # marker = np.zeros((L, ))                                     # Definition of the marker vector
@@ -60,13 +103,19 @@ P[L:] = 1
 # print(np.mean(marker))
 
 
-
+# psi2 = Vodd @ psi
+# psi2 = psi2 / np.linalg.norm(psi2)
+# rho2 = chain.calc_opdm_from_psi(psi2, parity='odd')
+# values2 = np.linalg.eigvalsh(rho2)
+# P2 = np.zeros((2 * L,))
+# P2[L:] = 1
+# print("Projector 2: ", np.allclose(P2, values2))
 
 #%% Figures
 
-# Spectrum of the density matrix
+# Spectrum of the Hamiltonian
 plt.figure()
-plt.plot(range(len(Eeven)), Eeven, '.y', markersize=15)
+plt.plot(range(len(Eodd)), Eodd, '.y', markersize=15)
 # plt.plot(range(len(Esp)), Esp, '.b', markersize=5)
 # plt.plot(r, Energy[r], '.r', markersize=6)
 # plt.ylim(-0.1, 0.1)
