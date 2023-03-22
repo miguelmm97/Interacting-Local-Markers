@@ -179,7 +179,6 @@ class model:
     
     def __post_init__(self):
         self.calc_basis()
-   
     
     def calc_basis(self):
         """
@@ -220,8 +219,7 @@ class model:
         self.rp2a = rp_to_a             # Update maps between the different bases
         self.a2rm = a_to_rm             # Update maps between the different bases
         self.rm2a = rm_to_a             # Update maps between the different bases
-        
-        
+
     def calc_Hamiltonian(self, parity='even', bc='periodic'):
 
         """
@@ -273,7 +271,11 @@ class model:
             Lhop2 = L-2
         else:
             raise ValueError('boundary condition must be "periodic" or "open"')
-    
+
+        # Disorder realisation
+        disorder_pot = self.lamb * np.random.uniform(0, 1, size=L)
+        disorder_hop1 = np.random.uniform(0, 1, size=L)
+        disorder_pair1 = np.random.uniform(0, 1, size=L)
 
         # Hamiltonian
         for r in range(dim):
@@ -283,21 +285,21 @@ class model:
             self.Hbasis[r, -1] = r
 
             # Diagonal terms (mu and V terms)
-            H[r, r] += self.V * np.dot(n[:Lhop], np.roll(n, -1)[:Lhop])  # + np.dot(n - 0.5, self.mu*np.ones(L))
-            H[r, r] += -np.dot(n - 0.5, self.mu * np.ones(L))        # - np.dot(n, self.mu*np.ones(L))
-            H[r, r] += -np.dot(n - 0.5, self.lamb * np.random.uniform(0, 1, size=L))
-                                                 # np.sum(np.random.uniform(-self.lamb, self.lamb, size=int(np.sum(n))))
+            H[r, r] += self.V * np.dot(n[:Lhop], np.roll(n, -1)[:Lhop])
+            H[r, r] += -np.dot(n - 0.5, self.mu * np.ones(L))
+            H[r, r] += -np.dot(n, disorder_pot)
+
 
             # Nearest-neighbour terms
             for i in range(Lhop):
 
-                j = np.mod(i + 1, L)     # j is either i+1 or 0
+                j = np.mod(i + 1, Lhop)     # j is either i+1 or 0
 
                 # Hopping term
                 try:
                     b, h = self.hopping(n, i, j)
                     s = a_to_r[b]
-                    ht = -self.t * h  #* np.random.uniform(-1, 1, size=1)
+                    ht = -self.t * h # * disorder_hop1[i]
                     H[s, r] += ht
                     H[r, s] += np.conjugate(ht)
                 except TypeError:
@@ -307,7 +309,7 @@ class model:
                 try:
                     b, h = self.pairing(n, i, j)
                     s = a_to_r[b]
-                    hp = self.Delta * h # * np.random.uniform(0, 1, size=1)
+                    hp = -self.Delta * h # * disorder_pair1[i]
                     H[s, r] += hp
                     H[r, s] += np.conjugate(hp)
                 except TypeError:
@@ -322,7 +324,7 @@ class model:
                 try:
                     b, h = self.hopping(n, i, j)
                     s = a_to_r[b]
-                    ht = -self.t2 * h * (2 * n[np.mod(i + 1, L)] -1)
+                    ht = -self.t2 * h * (2 * n[np.mod(i + 1, L)] - 1)
                     H[s, r] += ht
                     H[r, s] += np.conjugate(ht)
                 except TypeError:
@@ -332,15 +334,13 @@ class model:
                 try:
                     b, h = self.pairing(n, i, j)
                     s = a_to_r[b]
-                    hp = self.Delta2 * h * (2 * n[np.mod(i + 1, L)] -1)
+                    hp = -self.Delta2 * h * (2 * n[np.mod(i + 1, L)] - 1)
                     H[s, r] += hp
                     H[r, s] += np.conjugate(hp)
                 except TypeError:
                     pass
 
-
         return H
-    
 
     def hopping(self, n, i, j):
 
@@ -354,7 +354,6 @@ class model:
         else:
             return None
 
-        
     def pairing(self, n, i, j):
         """
         Calculates the binary r, and phase alpha where
@@ -380,7 +379,6 @@ class model:
             return a - 2 ** i - 2 ** j, np.sign(i - j) * (-1) ** exponent
         else:
             return None
-
 
     def calc_opdm_operator(self, parity='even'):
         """
@@ -459,7 +457,6 @@ class model:
             self.rho['hh'][key] = rho['hh'][key].tocsr()
             
         return None
-    
 
     def calc_opdm_from_psi(self, psi, parity='even'):
         """
@@ -500,7 +497,6 @@ class model:
         
         return rho_opdm
 
-
     def show_basis(self):
         self.calc_basis()
 
@@ -526,7 +522,6 @@ class model:
         print("Hamiltonian basis")
         print("-----------------")
         print(self.Hbasis)
-
 
     def show_rho(self, i, j, parity="even"):
 
@@ -565,7 +560,6 @@ class model:
                               + str(bin_to_n(self.rm2a[j], self.L)) + str(" by hh"))
         return rho_eh, rho_hh
 
-
     def check_rho_prodStates(self, Vodd, parity="even", u1charge="conserved"):
         """
         Checks that the single particle density matrix becomes a projector for any
@@ -590,6 +584,31 @@ class model:
 
         print("check done for product states with U(1) charge " + str(u1charge))
 
+    def check_rho_eigenstates(self, V):
+
+        """
+        Checks that the single particle density matrix becomes a projector for any
+        eigenstate of the hamiltonian
+        """
+
+        sigma_x = np.array([[0, 1], [1, 0]])
+        Id = np.eye(int(self.L))
+        S = np.kron(sigma_x, Id)
+        P = np.zeros((2 * self.L,))
+        P[self.L:] = 1
+        for i in range(len(V[:, 0])):
+            psi2 = V[:, i]
+            psi2 = psi2 / np.linalg.norm(psi2)
+            rho = self.calc_opdm_from_psi(psi2, parity='odd')  # Single particle density matrix (BdG x position space)
+            values = spectrum(rho)[0]
+
+            print("--------")
+            print("State :", i)
+            print("Projector: ", np.allclose(P, values))
+            print("PH Symmetry: ", np.allclose(- S @ rho @ S + np.eye(2 * int(self.L)), np.conj(rho)))
+            print("Trace: ", np.allclose(np.trace(rho), self.L))
+            print("Hermiticity: ", np.allclose(rho, np.conj(rho.T)))
+            print("--------")
 
     def check_spectra(self):
 
