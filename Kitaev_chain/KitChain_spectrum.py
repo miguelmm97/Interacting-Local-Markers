@@ -1,17 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy.linalg import eigh
-from Jens2 import model, local_marker, Ham_bdg, spectrum, ManyBodySpectrum
+from Jens2 import model, local_marker, spectrum
+from info_lattice import reshape_psi, S_vN, calc_entropies,calc_info
 
 
 #%% Parameters
-t = 3                                     # Nearest-neighbour hopping
-t2 = 0.2                                    # Next-to-nearest neighbour hopping
-Delta = t                                 # Nearest-neighbour pairing
-Delta2 = t2                               # Next-to-nearest neighbour pairing
-V = t2                                    # Density-density interactions
+t = -1                                     # Nearest-neighbour hopping
+t2 = 0                                    # Next-to-nearest neighbour hopping
+Delta = 1                                 # Nearest-neighbour pairing
+Delta2 = 0                                # Next-to-nearest neighbour pairing
+V = 0                                     # Density-density interactions
 mu = 0                                    # Chemical potential
-lamb = 0.5                                # Onsite disorder
+lamb = 1                                # Onsite disorder
 L = 12                                    # Length of the chain
 
 # Pauli matrices
@@ -43,6 +44,14 @@ for i in range(L):
 print(np.mean(marker))
 
 
+l  = np.array(np.arange(0, L))
+ILat = np.zeros(L)
+print(ILat)
+
+for index in range(1, L):
+    print(index)
+    ILat[index] = sum(calc_info(psi)[index])
+
 
 #%% Figures
 
@@ -54,8 +63,7 @@ plt.ylabel("Energy")
 plt.title('$H$')
 plt.show()
 
-
-# # Spectrum of the density matrix
+# Spectrum of the density matrix
 plt.figure()
 plt.plot(range(0, 2*L), values, '.b', markersize=6)
 plt.ylim(0, 1)
@@ -64,14 +72,22 @@ plt.xlabel("Eigenstate number")
 plt.ylabel("Eigenvalue")
 plt.title('$\\rho$')
 plt.show()
-#
-# # Local marker
+
+# Local marker
 plt.figure()
 plt.plot(np.arange(L), marker, ".b")
 plt.ylim([-2, 2])
 plt.ylabel('$\\nu(r)$')
 plt.xlabel("$x$")
 plt.title('Marker')
+plt.show()
+
+# Information lattice
+plt.figure()
+plt.plot(l, ILat, '.b')
+plt.xlabel('$l$')
+plt.ylabel('$i_l$')
+plt.title('Information lattice')
 plt.show()
 
 

@@ -177,6 +177,19 @@ class model:
     def __post_init__(self):
         self.calc_basis()
 
+    def get_ar(self, parity='even'):
+
+        if parity == 'even':
+            r_to_a = self.rp2a
+            a_to_r = self.a2rp
+        elif parity == 'odd':
+            r_to_a = self.rm2a
+            a_to_r = self.a2rm
+        else:
+            raise ValueError('parity must be "even" or "odd"')
+
+        return r_to_a, a_to_r
+
     def calc_basis(self):
         """
         Separates the full Hilbert space into even and odd sectors.
@@ -629,6 +642,15 @@ class model:
         plt.title('$H$')
         plt.show()
 
+    def expand_psi_to_full_space(self, psi, parity='even'):
+
+        r_to_a, a_to_r = self.get_ar(parity)
+        psi_full = np.zeros(2 ** L, dtype=psi.dtype)
+
+        for r in range(2 ** (self.L - 1)):
+            psi_full[r_to_a[r]] = psi[r]
+
+        return psi_full
 
 if __name__ == '__main__':
     L = 10;
