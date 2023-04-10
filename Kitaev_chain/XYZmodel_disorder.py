@@ -7,13 +7,13 @@ from Jens2 import model, local_marker, Ham_bdg, spectrum, ManyBodySpectrum
 
 start_time = time.time()
 #%% Parameters
-t_vec = np.linspace(-1, 1, 10)            # Nearest-neighbour hopping
+t = -1                                     # Nearest-neighbour hopping
 t2 = 0                                    # Next-to-nearest neighbour hopping
-Delta = 1                             # Nearest-neighbour pairing
+Delta = 1                                 # Nearest-neighbour pairing
 Delta2 = 0                                # Next-to-nearest neighbour pairing
-Vint = 0.0                                # Density-density interactions
+Vint = 0.5                                # Density-density interactions
 mu = 0                                    # Chemical potential
-lamb = 0.5                                # Onsite disorder
+lamb_vec = np.linspace(0, 10, 10)          # Onsite disorder
 L = 9                                     # Length of the chain
 parity = 'even'
 
@@ -21,14 +21,14 @@ parity = 'even'
 sigma_x = np.array([[0, 1], [1, 0]])
 sigma_y = np.array([[0, -1j], [1j, 0]])
 sigma_z = np.array([[1, 0], [0, -1]])
-av_marker = np.zeros(len(t_vec))
+av_marker = np.zeros(len(lamb_vec))
 Id = np.eye(int(L))                       # Identity in position space
 S = np.kron(sigma_x, Id)                  # Chiral symmetry of the chain (BdG x position space)
 
 #%% Transition between +1 and -1
 
-for i, t in enumerate(t_vec):
-    print('Realisation: {}/{}'.format(i, len(t_vec)))
+for i, lamb in enumerate(lamb_vec):
+    print('Realisation: {}/{}'.format(i, len(lamb_vec)))
 
     # XYZ model for the specified parameters
     chain = model(t, t2, Vint, mu, Delta, Delta2, lamb, L)
@@ -57,7 +57,7 @@ print('Time elapsed: {:.2e} s'.format(time.time() - start_time))
 
 # Local marker
 plt.figure()
-plt.plot(t_vec, av_marker, ".b")
+plt.plot(lamb_vec, av_marker, ".b")
 plt.ylim([-2, 2])
 plt.ylabel('$\\nu(r)$')
 plt.xlabel("$t$")
@@ -65,12 +65,12 @@ plt.title('Average Marker')
 plt.show()
 
 # Spectrum of the density matrix
-plt.figure()
-plt.plot(range(0, 2*L), values, '.b', markersize=6)
-plt.ylim(0, 1)
-plt.xlim(0, 2 * L)
-plt.xlabel("Eigenstate number")
-plt.ylabel("Eigenvalue")
-plt.title('$\\rho$')
-plt.show()
+# plt.figure()
+# plt.plot(range(0, 2*L), values, '.b', markersize=6)
+# plt.ylim(0, 1)
+# plt.xlim(0, 2 * L)
+# plt.xlabel("Eigenstate number")
+# plt.ylabel("Eigenvalue")
+# plt.title('$\\rho$')
+# plt.show()
 

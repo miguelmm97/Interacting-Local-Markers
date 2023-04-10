@@ -49,9 +49,7 @@ def local_marker(L_x, x, P, S, site):
 
     # Position operators  (take the particular site to be as far from the branch cut as possible)
     half_Lx = np.floor(L_x / 2)
-    deltaLx = np.heaviside(x[site] - half_Lx, 0) * abs(x[site] - (half_Lx + L_x)) + np.heaviside(half_Lx - x[site],
-                                                                                                 0) * abs(
-        half_Lx - x[site])
+    deltaLx = np.heaviside(x[site] - half_Lx, 0) * abs(x[site] - (half_Lx + L_x)) + np.heaviside(half_Lx - x[site], 0) * abs(half_Lx - x[site])
     x = (x + deltaLx) % L_x  # Relabel of the operators
     X = np.concatenate((x, x))  # X vector in BdG basis
     X = np.reshape(X, (len(X), 1))  # Column vector x
@@ -349,6 +347,127 @@ class model:
                     pass
 
         return H
+
+    def calc_sparse_Hamiltonian(self, parity='even', bc='periodic'):
+
+        """
+               Calculates the Hamiltonian in the even or odd parity sector.
+
+               Parameters
+               ----------
+               parity : string, optional
+                   Chooses the parity sector that is to be calculated.
+                   It can be either 'even' or 'odd'
+                   The default is 'even'.
+               bc : string, optional
+                   Sets the boundary condition.
+                   Can be either 'periodic' or 'open'
+                   The default is 'periodic'.
+
+               Raises
+               ------
+               NotImplementedError
+                   DESCRIPTION.
+
+               Returns
+               -------
+               H : np.array
+                   The Hamiltonian in the given sector with given boundary conditions.
+
+               """
+        L = self.L
+        dim = 2 ** (L - 1)
+        H = sparse.lil_matrix((dim, dim))
+
+        # Parity sector and boundary condition
+        if parity == 'even':
+            r_to_a = self.rp2a
+            a_to_r = self.a2rp
+            self.Hbasis = np.zeros((len(self.a2rp), self.L + 1))
+        elif parity == 'odd':
+            r_to_a = self.rm2a
+            a_to_r = self.a2rm
+            self.Hbasis = np.zeros((len(self.a2rm), self.L + 1))
+        else:
+            raise ValueError('parity must be "even" or "odd"')
+
+        if bc == 'periodic':
+            Lhop = L
+            Lhop2 = L
+        elif bc == 'open':
+            Lhop = L - 1
+            Lhop2 = L - 2
+        else:
+            raise ValueError('boundary condition must be "periodic" or "open"')
+
+        # Disorder realisation
+        disorder_pot = self.lamb * np.random.uniform(0, 1, size=L)
+        disorder_hop1 = np.random.uniform(0, 1, size=L)
+        disorder_pair1 = np.random.uniform(0, 1, size=L)
+
+        # Hamiltonian
+        for r in range(dim):
+            a = r_to_a[r]
+            n = bin_to_n(a, L)
+            self.Hbasis[r, :-1] = bin_to_n(a, self.L)
+            self.Hbasis[r, -1] = r
+
+            # Diagonal terms (mu and V terms)
+            H[r, r] += self.V * np.dot(n[:Lhop], np.roll(n, -1)[:Lhop])
+            H[r, r] += -np.dot(n - 0.5, self.mu * np.ones(L))
+            H[r, r] += -np.dot(n, disorder_pot)
+
+            # Nearest-neighbour terms
+            for i in range(Lhop):
+
+                j = np.mod(i + 1, Lhop)  # j is either i+1 or 0
+
+                # Hopping term
+                try:
+                    b, h = self.hopping(n, i, j)
+                    s = a_to_r[b]
+                    ht = -self.t * h  # * disorder_hop1[i]
+                    H[s, r] += ht
+                    H[r, s] += np.conjugate(ht)
+                except TypeError:
+                    pass
+
+                # Pairing term
+                try:
+                    b, h = self.pairing(n, i, j)
+                    s = a_to_r[b]
+                    hp = -self.Delta * h  # * disorder_pair1[i]
+                    H[s, r] += hp
+                    H[r, s] += np.conjugate(hp)
+                except TypeError:
+                    pass
+
+            # Next-to-nearest neighbour
+            for i in range(Lhop2):
+
+                j = np.mod(i + 2, L)  # j is either i+1 or 0
+
+                # Hopping term
+                try:
+                    b, h = self.hopping(n, i, j)
+                    s = a_to_r[b]
+                    ht = -self.t2 * h * (2 * n[np.mod(i + 1, L)] - 1)
+                    H[s, r] += ht
+                    H[r, s] += np.conjugate(ht)
+                except TypeError:
+                    pass
+
+                # Pairing term
+                try:
+                    b, h = self.pairing(n, i, j)
+                    s = a_to_r[b]
+                    hp = -self.Delta2 * h * (2 * n[np.mod(i + 1, L)] - 1)
+                    H[s, r] += hp
+                    H[r, s] += np.conjugate(hp)
+                except TypeError:
+                    pass
+
+        return H.tocsr()
 
     def hopping(self, n, i, j):
 
