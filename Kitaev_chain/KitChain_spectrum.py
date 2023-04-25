@@ -2,18 +2,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numpy.linalg import eigh
 from Jens2 import model, local_marker, spectrum
-from info_lattice import reshape_psi, S_vN, calc_entropies,calc_info
+from info_lattice import calc_info
 
 
 #%% Parameters
-t = -1                                     # Nearest-neighbour hopping
-t2 = 0                                    # Next-to-nearest neighbour hopping
-Delta = 1                                 # Nearest-neighbour pairing
-Delta2 = 0                                # Next-to-nearest neighbour pairing
-V = 0                                     # Density-density interactions
-mu = 0                                    # Chemical potential
-lamb = 1                                # Onsite disorder
-L = 12                                    # Length of the chain
+t = -1                                                        # Nearest-neighbour hopping
+t2 = 0                                                        # Next-to-nearest neighbour hopping
+Delta = 1                                                     # Nearest-neighbour pairing
+Delta2 = 0                                                    # Next-to-nearest neighbour pairing
+V = 0                                                         # Density-density interactions
+mu = 0                                                        # Chemical potential
+lamb = 1                                                      # Onsite disorder
+L = 12                                                        # Length of the chain
 
 # Pauli matrices
 sigma_x = np.array([[0, 1], [1, 0]])
@@ -24,30 +24,28 @@ sigma_z = np.array([[1, 0], [0, -1]])
 #%% Hamiltonian
 
 # Many body calculation
-chain = model(t, t2, V, mu, Delta, Delta2, lamb, L)       # Kitaev chain with the specified parameters
-H = chain.calc_Hamiltonian(parity='odd', bc='periodic')   # Hamiltonian on the odd parity sector
-E, V = np.linalg.eigh(H)                                  # Spectrum in the even parity sector
+chain = model(t, t2, V, mu, Delta, Delta2, lamb, L)           # Kitaev chain with the specified parameters
+H = chain.calc_Hamiltonian(parity='odd', bc='periodic')       # Hamiltonian on the odd parity sector
+E, V = np.linalg.eigh(H)                                      # Spectrum in the even parity sector
 
+# Selecting a many-body state
 n_eig = 10
 psi = V[:, n_eig]
 psi = psi / np.linalg.norm(psi)
-rho = chain.calc_opdm_from_psi(psi, parity='odd')        # Single particle density matrix (BdG x position space)
+rho = chain.calc_opdm_from_psi(psi, parity='odd')             # Single particle density matrix (BdG x position space)
 values = spectrum(rho)[0]
-# chain.check_rho_eigenstates(V)
 
 # Local chiral marker
-Id = np.eye(int(L))                                          # Identity in position space
-S = np.kron(sigma_x, Id)                                     # Chiral symmetry of the chain (BdG x position space)
-marker = np.zeros((L, ))                                     # Definition of the marker vector
+Id = np.eye(int(L))                                           # Identity in position space
+S = np.kron(sigma_x, Id)                                      # Chiral symmetry of the chain (BdG x position space)
+marker = np.zeros((L, ))                                      # Definition of the marker vector
 for i in range(L):
-    marker[i] = local_marker(L, np.arange(L), rho, S, i)     # Local marker at each site of the chain
+    marker[i] = local_marker(L, np.arange(L), rho, S, i)      # Local marker at each site of the chain
 print(np.mean(marker))
 
-
+# Information lattice
 l  = np.array(np.arange(0, L))
 ILat = np.zeros(L)
-print(ILat)
-
 for index in range(1, L):
     print(index)
     ILat[index] = sum(calc_info(psi)[index])

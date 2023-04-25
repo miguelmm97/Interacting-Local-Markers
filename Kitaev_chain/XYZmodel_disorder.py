@@ -3,24 +3,27 @@ import matplotlib.pyplot as plt
 import time
 from scipy.sparse.linalg import eigsh
 from numpy.linalg import eigh
-from Jens2 import model, local_marker, Ham_bdg, spectrum, ManyBodySpectrum
+from Jens2 import model, local_marker, spectrum
 
 start_time = time.time()
 #%% Parameters
-t = -1                                     # Nearest-neighbour hopping
-t2 = 0                                    # Next-to-nearest neighbour hopping
-Delta = 1                                 # Nearest-neighbour pairing
-Delta2 = 0                                # Next-to-nearest neighbour pairing
-Vint = 0.5                                # Density-density interactions
-mu = 0                                    # Chemical potential
-lamb_vec = np.linspace(0, 10, 10)          # Onsite disorder
-L = 9                                     # Length of the chain
-parity = 'even'
-
 # Pauli matrices
 sigma_x = np.array([[0, 1], [1, 0]])
 sigma_y = np.array([[0, -1j], [1j, 0]])
 sigma_z = np.array([[1, 0], [0, -1]])
+
+# Parameter space
+t = -1                                     # Nearest-neighbour hopping
+t2 = 0                                     # Next-to-nearest neighbour hopping
+Delta = 1                                  # Nearest-neighbour pairing
+Delta2 = 0                                 # Next-to-nearest neighbour pairing
+Vint = 0.5                                 # Density-density interactions
+mu = 0                                     # Chemical potential
+lamb_vec = np.linspace(0, 10, 10)          # Onsite disorder
+L = 9                                      # Length of the chain
+parity = 'even'
+
+# Definitions
 av_marker = np.zeros(len(lamb_vec))
 Id = np.eye(int(L))                       # Identity in position space
 S = np.kron(sigma_x, Id)                  # Chiral symmetry of the chain (BdG x position space)
@@ -30,30 +33,31 @@ S = np.kron(sigma_x, Id)                  # Chiral symmetry of the chain (BdG x 
 for i, lamb in enumerate(lamb_vec):
     print('Realisation: {}/{}'.format(i, len(lamb_vec)))
 
-    # XYZ model for the specified parameters
+    # Hamiltonian
     chain = model(t, t2, Vint, mu, Delta, Delta2, lamb, L)
-    H = chain.calc_sparse_Hamiltonian(parity=parity, bc='periodic')  # Hamiltonian on the odd parity sector
-    # H2 = chain.calc_Hamiltonian(parity='odd', bc='periodic')  # Hamiltonian on the odd parity sector
+    H = chain.calc_sparse_Hamiltonian(parity=parity, bc='periodic')
     E0, psi0 = eigsh(H, k=1, which='SA')
-    # print(np.allclose(H.todense(), H2))
+    # H2 = chain.calc_Hamiltonian(parity='odd', bc='periodic')
     # E02, psi0 = spectrum(H2)
-    # print(E0, psi0.shape)
-    # print(E02[0], psi02[:, 0].shape)
 
-    # Single particle density matrix for the middle of the spectrum
+    # Single particle density matrix
     # n_eig = 0
     # psi = V[:, n_eig]
     psi0 = psi0[:, 0] / np.linalg.norm(psi0)
-    rho = chain.calc_opdm_from_psi(psi0, parity=parity)  # Single particle density matrix (BdG x position space)
+    rho = chain.calc_opdm_from_psi(psi0, parity=parity)
     values = spectrum(rho)[0]
 
     # Local chiral marker
-    marker = np.zeros((L,))  # Definition of the marker vector
+    marker = np.zeros((L,))
     for j in range(L):
-        marker[j] = local_marker(L, np.arange(L), rho, S, j)  # Local marker at each site of the chain
+        marker[j] = local_marker(L, np.arange(L), rho, S, j)
     av_marker[i] = np.mean(marker)
 
 print('Time elapsed: {:.2e} s'.format(time.time() - start_time))
+
+
+
+#%% Figures
 
 # Local marker
 plt.figure()

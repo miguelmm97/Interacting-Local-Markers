@@ -5,61 +5,12 @@ Created on Wed Nov 30 10:48:54 2022
 
 @author: jensba
 """
-import random
-
 import numpy as np
 from dataclasses import dataclass
 from scipy import sparse
 from scipy.stats import unitary_group
 import itertools
 import matplotlib.pyplot as plt
-
-
-def spectrum(H):
-    # Calculates the spectrum a of the given Hamiltonian
-    # H: Hamiltonian for the model
-    # n_particles: Number of particles we want (needed for the projector)
-
-    energy, eigenstates = np.linalg.eigh(H)  # Diagonalise H
-    idx = energy.argsort()  # Indexes from lower to higher energy
-    energy = energy[idx]  # Ordered energy eigenvalues
-    eigenstates = eigenstates[:, idx]  # Ordered eigenstates
-
-    return energy, eigenstates
-
-
-def local_marker(L_x, x, P, S, site):
-    """
-    Calculates the local CS marker for the specified site on a 1d chain in the BdG basis
-
-    ----------
-    Parameters:
-    L_x, L_y, L_z: Number of lattice sites in each direction
-    n_orb : Number of orbitals
-    n_sites: Number of lattice sites
-    x, y, z: Vectors with the position of the lattice sites
-    P : Valence band projector
-    S: Chiral symmetry operator of the model
-    site: Number of the site we calculate the marker on
-
-    ----------
-    Returns:
-    Marker vector on each site
-    """
-
-    # Position operators  (take the particular site to be as far from the branch cut as possible)
-    half_Lx = np.floor(L_x / 2)
-    deltaLx = np.heaviside(x[site] - half_Lx, 0) * abs(x[site] - (half_Lx + L_x)) + np.heaviside(half_Lx - x[site], 0) * abs(half_Lx - x[site])
-    x = (x + deltaLx) % L_x  # Relabel of the operators
-    X = np.concatenate((x, x))  # X vector in BdG basis
-    X = np.reshape(X, (len(X), 1))  # Column vector x
-
-    # Marker calculation
-    M = P @ S @ (X * P)  # Marker operator (BdG x position space)
-    marker = -2 * (M[site, site] + M[L_x + site, L_x + site])  # Trace over each site
-
-    return marker
-
 
 def bin_to_n(s, L):
     """
@@ -87,7 +38,6 @@ def bin_to_n(s, L):
 
     return np.array([int(x) for x in reversed(bin(s)[2:].zfill(L))])
 
-
 def n_to_bin(n):
     """
     Given an occupation number representation of a state n,
@@ -113,69 +63,201 @@ def n_to_bin(n):
 
     return int(''.join(str(x) for x in reversed(n)), 2)
 
-
 def Ham_bdg(L, t, delta, mu):
-    sigma = [np.array([[1, 0], [0, 1]]),  # Pauli 0
-             np.array([[0, 1], [1, 0]]),  # Pauli x
-             np.array([[0, -1j], [1j, 0]]),  # Pauli y
-             np.array([[1, 0], [0, -1]])]  # Pauli z
+    """
+    Calculates the single-particle Hamiltonian
+
+    Params:
+    ------
+    L:         {int} System size
+    t:       {float} Hopping amplitude
+    delta:   {float} Pairing amplitude
+    mu:      {float} Chemical potential
+
+    Returns:
+    H:    {np.array} Single-particle hamiltonian
+    """
+
+    sigma = [np.array([[1, 0], [0, 1]]),        # Pauli 0
+             np.array([[0, 1], [1, 0]]),        # Pauli x
+             np.array([[0, -1j], [1j, 0]]),     # Pauli y
+             np.array([[1, 0], [0, -1]])]       # Pauli z
 
     # Real space basis
-    vector = np.zeros(L);
-    basis = []
+    vector = np.zeros(L); basis = []
     for index in range(L):
         vector[index] = 1
         basis.append(vector)
         vector = np.zeros(L)
 
     # Real space projectors
-    n_offdiag = []  # |n><n+1|
-    n_diag = []  # |n><n|
+    n_offdiag = []                               # |n><n+1|
+    n_diag = []                                  # |n><n|
     for i in range(L):
         j = np.mod(i + 1, L)
         n_offdiag.append(np.outer(basis[i], basis[j]))
         n_diag.append(np.outer(basis[i], basis[i]))
 
-    n_offdiag_tot = sum(n_offdiag)  # sums all n_ matrices as the tensor product is linear
+    # Hamiltonian construction
+    n_offdiag_tot = sum(n_offdiag)               # sums all n_ matrices as the tensor product is linear
     n_diag_tot = sum(n_diag)
-
     tau = -(t * sigma[3] + 1j * delta * sigma[2])
     H = np.kron(tau, n_offdiag_tot)
     H = H + np.conj(H.T) - mu * np.kron(sigma[3], n_diag_tot)
 
     return 0.5 * H
 
-
 def ManyBodySpectrum(E):
+    """
+    Calculates the many body spectrum provided the single-particle levels
+
+    Params:
+    ------
+    E:  {np.array} Single-particle energy levels
+
+    Returns:
+    -------
+    energy:  {np.array} Many-body levels
+    """
+
     spectrum = []
-    comb_list = []
     combinations = itertools.product([-1, 1], repeat=len(E))
-    for i in combinations:
-        # print(i)
-        spectrum.append(np.dot(E, np.array(i)))
+    for i in combinations: spectrum.append(np.dot(E, np.array(i)))
 
     energy = np.array(spectrum)
+    idx = energy.argsort()
+    energy = energy[idx]
+    return energy
+
+def hopping(n, i, j):
+    """
+    Calculates the binary r, and phase alpha where
+    c^{\dagger}_i c_j |a> = \alpha |r>
+    with a obtained from the state n = [n0,...,n_{L-1}]
+
+    Parameters
+    ----------
+    n : list of integers
+        the binary representation of the state [n0,n1,...,n_{L-1}].
+    i : int
+    j : int
+
+    Returns
+    -------
+    r and alpha if the state |a> is not anihilated,
+    otherwise return None.
+
+    """
+    if i == j and n[i] == 1:
+        a = n_to_bin(n)
+        return a, 1
+    elif n[i] == 0 and n[j] == 1:
+        a = n_to_bin(n)
+        exponent = np.sum(n[min(i, j) + 1:max(i, j)])
+        return a + 2 ** i - 2 ** j, (-1) ** exponent
+    else:
+        return None
+
+def pairing(n, i, j):
+    """
+    Calculates the binary r, and phase alpha where
+    c_i c_j |a> = \alpha |r>
+    with a obtained from the state n = [n0,...,n_{L-1}]
+
+    Parameters
+    ----------
+    n : list of integers
+        the binary representation of the state [n0,n1,...,n_{L-1}].
+    i : int
+    j : int
+
+    Returns
+    -------
+    r and alpha if the state |a> is not anihilated,
+    otherwise return None.
+
+    """
+    if i != j and (n[i] == 1 and n[j] == 1):
+        a = n_to_bin(n)
+        exponent = np.sum(n[min(i, j):max(i, j)])
+        return a - 2 ** i - 2 ** j, np.sign(i - j) * (-1) ** exponent
+    else:
+        return None
+
+def spectrum(H):
+    # Calculates the spectrum a of the given Hamiltonian
+    # H: Hamiltonian for the model
+    # n_particles: Number of particles we want (needed for the projector)
+
+    energy, eigenstates = np.linalg.eigh(H)  # Diagonalise H
     idx = energy.argsort()  # Indexes from lower to higher energy
     energy = energy[idx]  # Ordered energy eigenvalues
-    return energy
+    eigenstates = eigenstates[:, idx]  # Ordered eigenstates
+
+    return energy, eigenstates
+
+def local_marker(L_x, x, P, S, site):
+    """
+    Calculates the local CS marker for the specified site on a 1d chain in the BdG basis
+
+    ----------
+    Parameters:
+    L_x, L_y, L_z: Number of lattice sites in each direction
+    n_orb : Number of orbitals
+    n_sites: Number of lattice sites
+    x, y, z: Vectors with the position of the lattice sites
+    P : Valence band projector
+    S: Chiral symmetry operator of the model
+    site: Number of the site we calculate the marker on
+
+    ----------
+    Returns:
+    Marker vector on each site
+    """
+
+    # Position operators  (take the particular site to be as far from the branch cut as possible)
+    half_Lx = np.floor(L_x / 2)
+    deltaLx = np.heaviside(x[site] - half_Lx, 0) * abs(x[site] - (half_Lx + L_x)) + np.heaviside(half_Lx - x[site], 0) * abs(half_Lx - x[site])
+    x = (x + deltaLx) % L_x                                      # Relabel of the operators
+    X = np.concatenate((x, x))                                   # X vector in BdG basis
+    X = np.reshape(X, (len(X), 1))                               # Column vector x
+
+    # Marker calculation
+    M = P @ S @ (X * P)                                          # Marker operator (BdG x position space)
+    marker = -2 * (M[site, site] + M[L_x + site, L_x + site])    # Trace over each site
+
+    return marker
 
 
 @dataclass
 class model:
-    """ spinless 1D fermions """
-    t: float  # nearest neighbor hopping t(c^dagger_i c_{i+1} + h.c)
-    t2: float
-    V: float  # nearest neighbor density-density interaction Vc^dagger_ic_i
-    mu: float  # chemical potential -mu (c^\dagger_i c_i -1/2)
-    Delta: float  # Pairing potential Delta c_i c_{i+1}
-    Delta2: float
-    lamb: float
-    L: int  # Number of sites
+    """ Generates the Hamiltonian for a  disordered Kitaev chain """
+
+    t:             float   # nearest neighbor hopping t(c^dagger_i c_{i+1} + h.c)
+    t2:            float   # next-to-nearest neighbor hopping t(c^dagger_i c_{i+1} + h.c)
+    V:             float   # nearest neighbor density-density interaction Vc^dagger_ic_i
+    mu:            float   # chemical potential -mu (c^\dagger_i c_i -1/2)
+    Delta:         float   # Pairing potential Delta c_i c_{i+1}
+    Delta2:        float   # Nest-to-nearest neighbour pairing potential Delta c_i c_{i+2}
+    lamb:          float   # Anderson disorder
+    L:               int   # Number of sites
 
     def __post_init__(self):
         self.calc_basis()
 
+    # Class methods
     def get_ar(self, parity='even'):
+        """
+        Selects the parity sector of the Hilbert space
+
+        Params:
+        ------
+        parity: {string} Selects 'even' or 'odd' parity sector
+
+        Returns:
+        -------
+        r_to_a, a_to_r : {list} Lists that map parity sectors with the full Hilbert space
+        """
 
         if parity == 'even':
             r_to_a = self.rp2a
@@ -202,63 +284,52 @@ class model:
 
         """
         L = self.L
-        a_to_rp = {}  # Map from the binary basis to the parity basis
-        a_to_rm = {}  # Map from the binary basis to the parity basis
-        rp_to_a = {}  # Map from parity basis to the binary basis
-        rm_to_a = {}  # Map from parity basis to the binary basis
-        rp = 0  # Dimension counting for the parity sector
-        rm = 0  # Dimension counting for the parity sector
+        a_to_rp = {}                    # Map from the binary basis to the parity basis
+        a_to_rm = {}                    # Map from the binary basis to the parity basis
+        rp_to_a = {}                    # Map from parity basis to the binary basis
+        rm_to_a = {}                    # Map from parity basis to the binary basis
+        rp = 0                          # Dimension counting for the parity sector
+        rm = 0                          # Dimension counting for the parity sector
 
         for a in range(2 ** L):
 
-            n_a = bin_to_n(a, L)  # Occupation number representation of state a
+            n_a = bin_to_n(a, L)        # Occupation number representation of state a
 
-            if np.sum(n_a) % 2 == 0:  # Even parity sector
+            # Even parity sector
+            if np.sum(n_a) % 2 == 0:
                 a_to_rp[a] = rp
                 rp_to_a[rp] = a
                 rp += 1
-            else:  # Odd parity sector
+            # Odd parity sector
+            else:
                 a_to_rm[a] = rm
                 rm_to_a[rm] = a
                 rm += 1
 
-        self.a2rp = a_to_rp  # Update maps between the different bases
-        self.rp2a = rp_to_a  # Update maps between the different bases
-        self.a2rm = a_to_rm  # Update maps between the different bases
-        self.rm2a = rm_to_a  # Update maps between the different bases
+        self.a2rp = a_to_rp             # Update maps between the different bases
+        self.rp2a = rp_to_a             # Update maps between the different bases
+        self.a2rm = a_to_rm             # Update maps between the different bases
+        self.rm2a = rm_to_a             # Update maps between the different bases
 
     def calc_Hamiltonian(self, parity='even', bc='periodic'):
-
         """
         Calculates the Hamiltonian in the even or odd parity sector.
 
         Parameters
         ----------
-        parity : string, optional
-            Chooses the parity sector that is to be calculated.
-            It can be either 'even' or 'odd'
-            The default is 'even'.
-        bc : string, optional
-            Sets the boundary condition.
-            Can be either 'periodic' or 'open'
-            The default is 'periodic'.
-
-        Raises
-        ------
-        NotImplementedError
-            DESCRIPTION.
+        parity : {string, optional}  Chooses the parity sector that is to be calculated. It can be either 'even' or 'odd'
+        bc :     {string, optional} Sets the boundary condition. Can be either 'periodic' or 'open'
 
         Returns
         -------
-        H : np.array
-            The Hamiltonian in the given sector with given boundary conditions.
-
+        H :              {np.array} The Hamiltonian in the given sector with given boundary conditions.
         """
+
         L = self.L
         dim = 2 ** (L - 1)
         H = np.zeros((dim, dim))
 
-        # Parity sector and boundary condition
+        # Parity sector
         if parity == 'even':
             r_to_a = self.rp2a
             a_to_r = self.a2rp
@@ -267,22 +338,21 @@ class model:
             r_to_a = self.rm2a
             a_to_r = self.a2rm
             self.Hbasis = np.zeros((len(self.a2rm), self.L + 1))
-        else:
-            raise ValueError('parity must be "even" or "odd"')
+        else: raise ValueError('parity must be "even" or "odd"')
 
+        # Boundary conditions
         if bc == 'periodic':
             Lhop = L
             Lhop2 = L
         elif bc == 'open':
             Lhop = L - 1
             Lhop2 = L - 2
-        else:
-            raise ValueError('boundary condition must be "periodic" or "open"')
+        else: raise ValueError('boundary condition must be "periodic" or "open"')
 
         # Disorder realisation
         disorder_pot = self.lamb * np.random.uniform(0, 1, size=L)
-        disorder_hop1 = np.random.uniform(0, 1, size=L)
-        disorder_pair1 = np.random.uniform(0, 1, size=L)
+        # disorder_hop1 = np.random.uniform(0, 1, size=L)
+        # disorder_pair1 = np.random.uniform(0, 1, size=L)
 
         # Hamiltonian
         for r in range(dim):
@@ -298,12 +368,11 @@ class model:
 
             # Nearest-neighbour terms
             for i in range(Lhop):
-
                 j = np.mod(i + 1, Lhop)  # j is either i+1 or 0
 
                 # Hopping term
                 try:
-                    b, h = self.hopping(n, i, j)
+                    b, h = hopping(n, i, j)
                     s = a_to_r[b]
                     ht = -self.t * h  # * disorder_hop1[i]
                     H[s, r] += ht
@@ -313,7 +382,7 @@ class model:
 
                 # Pairing term
                 try:
-                    b, h = self.pairing(n, i, j)
+                    b, h = pairing(n, i, j)
                     s = a_to_r[b]
                     hp = -self.Delta * h  # * disorder_pair1[i]
                     H[s, r] += hp
@@ -323,12 +392,11 @@ class model:
 
             # Next-to-nearest neighbour
             for i in range(Lhop2):
-
                 j = np.mod(i + 2, L)  # j is either i+1 or 0
 
                 # Hopping term
                 try:
-                    b, h = self.hopping(n, i, j)
+                    b, h = hopping(n, i, j)
                     s = a_to_r[b]
                     ht = -self.t2 * h * (2 * n[np.mod(i + 1, L)] - 1)
                     H[s, r] += ht
@@ -338,7 +406,7 @@ class model:
 
                 # Pairing term
                 try:
-                    b, h = self.pairing(n, i, j)
+                    b, h = pairing(n, i, j)
                     s = a_to_r[b]
                     hp = -self.Delta2 * h * (2 * n[np.mod(i + 1, L)] - 1)
                     H[s, r] += hp
@@ -351,35 +419,23 @@ class model:
     def calc_sparse_Hamiltonian(self, parity='even', bc='periodic'):
 
         """
-               Calculates the Hamiltonian in the even or odd parity sector.
+        Calculates the sparse Hamiltonian in the even or odd parity sector.
 
-               Parameters
-               ----------
-               parity : string, optional
-                   Chooses the parity sector that is to be calculated.
-                   It can be either 'even' or 'odd'
-                   The default is 'even'.
-               bc : string, optional
-                   Sets the boundary condition.
-                   Can be either 'periodic' or 'open'
-                   The default is 'periodic'.
+        Parameters
+        ----------
+        parity : {string, optional}  Chooses the parity sector that is to be calculated. It can be either 'even' or 'odd'
+        bc :     {string, optional} Sets the boundary condition. Can be either 'periodic' or 'open'
 
-               Raises
-               ------
-               NotImplementedError
-                   DESCRIPTION.
+        Returns
+        -------
+        H :            b{sparse.csr} The Hamiltonian in the given sector with given boundary conditions.
+        """
 
-               Returns
-               -------
-               H : np.array
-                   The Hamiltonian in the given sector with given boundary conditions.
-
-               """
         L = self.L
         dim = 2 ** (L - 1)
         H = sparse.lil_matrix((dim, dim))
 
-        # Parity sector and boundary condition
+        # Parity sector
         if parity == 'even':
             r_to_a = self.rp2a
             a_to_r = self.a2rp
@@ -388,22 +444,21 @@ class model:
             r_to_a = self.rm2a
             a_to_r = self.a2rm
             self.Hbasis = np.zeros((len(self.a2rm), self.L + 1))
-        else:
-            raise ValueError('parity must be "even" or "odd"')
+        else: raise ValueError('parity must be "even" or "odd"')
 
+        # Boundary conditions
         if bc == 'periodic':
             Lhop = L
             Lhop2 = L
         elif bc == 'open':
             Lhop = L - 1
             Lhop2 = L - 2
-        else:
-            raise ValueError('boundary condition must be "periodic" or "open"')
+        else: raise ValueError('boundary condition must be "periodic" or "open"')
 
         # Disorder realisation
         disorder_pot = self.lamb * np.random.uniform(0, 1, size=L)
-        disorder_hop1 = np.random.uniform(0, 1, size=L)
-        disorder_pair1 = np.random.uniform(0, 1, size=L)
+        # disorder_hop1 = np.random.uniform(0, 1, size=L)
+        # disorder_pair1 = np.random.uniform(0, 1, size=L)
 
         # Hamiltonian
         for r in range(dim):
@@ -419,12 +474,11 @@ class model:
 
             # Nearest-neighbour terms
             for i in range(Lhop):
-
                 j = np.mod(i + 1, Lhop)  # j is either i+1 or 0
 
                 # Hopping term
                 try:
-                    b, h = self.hopping(n, i, j)
+                    b, h = hopping(n, i, j)
                     s = a_to_r[b]
                     ht = -self.t * h  # * disorder_hop1[i]
                     H[s, r] += ht
@@ -434,7 +488,7 @@ class model:
 
                 # Pairing term
                 try:
-                    b, h = self.pairing(n, i, j)
+                    b, h = pairing(n, i, j)
                     s = a_to_r[b]
                     hp = -self.Delta * h  # * disorder_pair1[i]
                     H[s, r] += hp
@@ -444,12 +498,11 @@ class model:
 
             # Next-to-nearest neighbour
             for i in range(Lhop2):
-
                 j = np.mod(i + 2, L)  # j is either i+1 or 0
 
                 # Hopping term
                 try:
-                    b, h = self.hopping(n, i, j)
+                    b, h = hopping(n, i, j)
                     s = a_to_r[b]
                     ht = -self.t2 * h * (2 * n[np.mod(i + 1, L)] - 1)
                     H[s, r] += ht
@@ -459,7 +512,7 @@ class model:
 
                 # Pairing term
                 try:
-                    b, h = self.pairing(n, i, j)
+                    b, h = pairing(n, i, j)
                     s = a_to_r[b]
                     hp = -self.Delta2 * h * (2 * n[np.mod(i + 1, L)] - 1)
                     H[s, r] += hp
@@ -468,44 +521,6 @@ class model:
                     pass
 
         return H.tocsr()
-
-    def hopping(self, n, i, j):
-
-        if i == j and n[i] == 1:
-            a = n_to_bin(n)
-            return a, 1
-        elif n[i] == 0 and n[j] == 1:
-            a = n_to_bin(n)
-            exponent = np.sum(n[min(i, j) + 1:max(i, j)])
-            return a + 2 ** i - 2 ** j, (-1) ** exponent
-        else:
-            return None
-
-    def pairing(self, n, i, j):
-        """
-        Calculates the binary r, and phase alpha where
-        c_i c_j |a> = \alpha |r>
-        with a obtained from the state n = [n0,...,n_{L-1}]
-
-        Parameters
-        ----------
-        n : list of integers
-            the binary representation of the state [n0,n1,...,n_{L-1}].
-        i : int
-        j : int
-
-        Returns
-        -------
-        r and alpha if the state |a> is not anihilated,
-        otherwise return None.
-
-        """
-        if i != j and (n[i] == 1 and n[j] == 1):
-            a = n_to_bin(n)
-            exponent = np.sum(n[min(i, j):max(i, j)])
-            return a - 2 ** i - 2 ** j, np.sign(i - j) * (-1) ** exponent
-        else:
-            return None
 
     def calc_opdm_operator(self, parity='even'):
         """
@@ -525,13 +540,9 @@ class model:
         None. But sets self.rho to rho.
 
         """
-
         L = self.L
         dim = 2 ** (L - 1)
-
-        rho = {}
-        rho['eh'] = {}
-        rho['hh'] = {}
+        rho = {'eh': {}, 'hh': {}}
 
         # Initializing rho_eh operator as a lil_matrix
         for i, j in itertools.product(range(L), range(L)):
@@ -545,39 +556,34 @@ class model:
         elif parity == 'odd':
             r_to_a = self.rm2a
             a_to_r = self.a2rm
-        else:
-            raise ValueError('parity must be "even" or "odd"')
+        else: raise ValueError('parity must be "even" or "odd"')
 
         # Calculation of the matrix rho in the parity subspace
         for r in range(dim):
 
             # State r in the different basis
-            a = r_to_a[r]  # Binary
-            n = bin_to_n(a, L)  # Number representation
+            a = r_to_a[r]                                            # Binary
+            n = bin_to_n(a, L)                                       # Number representation
 
             # Iterate over the possible ij combinations
             for i, j in itertools.product(range(L), range(L)):
 
                 # Electron-hole block
                 try:
-                    b, alpha = self.hopping(n, i, j)  # c_i^\dagger c_j /r>
-                    rho['eh'][i, j][a_to_r[b], r] = alpha  # <b/ c^\dagger c/ r>
-                    # print("eh :" + str(i) + str(", ") + str(j) + " = " + str(alpha))
+                    b, alpha = hopping(n, i, j)                      # c_i^\dagger c_j /r>
+                    rho['eh'][i, j][a_to_r[b], r] = alpha            # <b/ c^\dagger c/ r>
                 except TypeError:
                     pass
 
                 # Hole-hole block
                 try:
-                    b, alpha = self.pairing(n, i, j)  # c_i c_j /r>
-                    rho['hh'][i, j][a_to_r[b], r] = alpha  # <b/ c^\dagger c/ r>
-                    # print("hh :" + str(i) + str(", ") + str(j) + " = " + str(alpha))
+                    b, alpha = pairing(n, i, j)                      # c_i c_j /r>
+                    rho['hh'][i, j][a_to_r[b], r] = alpha            # <b/ c^\dagger c/ r>
                 except TypeError:
                     pass
 
         # Convert sparse lil matrices to csr
-        self.rho = {}
-        self.rho['eh'] = {}
-        self.rho['hh'] = {}
+        self.rho = {'eh': {}, 'hh': {}}
         for key in rho['eh']:
             self.rho['eh'][key] = rho['eh'][key].tocsr()
             self.rho['hh'][key] = rho['hh'][key].tocsr()
@@ -615,15 +621,23 @@ class model:
             rho_opdm[i + L, j] = np.dot(psi.conjugate(), (self.rho['hh'][i, j] * psi))
         rho_opdm[L: 2 * L, L: 2 * L] = np.eye(L) - rho_opdm[:L, :L]  # .T
         rho_opdm[:L, L:2 * L] = rho_opdm[L: 2 * L, :L].T.conjugate()
-        # for i, j in itertools.product(range(L), range(L)):
-        #     rho_opdm[i, j] = np.dot(psi.conjugate(), (self.rho['eh'][i, j] * psi))
-        #     rho_opdm[i, j+L] = np.dot(psi.conjugate(), (self.rho['hh'][i, j] * psi))
-        # rho_opdm[L: 2*L, L: 2*L] = np.eye(L) - rho_opdm[:L, :L].conj()
-        # rho_opdm[L:2*L, :L] = -rho_opdm[:L, L:2*L].conj()
 
         return rho_opdm
 
+    def expand_psi_to_full_space(self, psi, parity='even'):
+
+        r_to_a, a_to_r = self.get_ar(parity)
+        psi_full = np.zeros(2 ** L, dtype=psi.dtype)
+
+        for r in range(2 ** (self.L - 1)):
+            psi_full[r_to_a[r]] = psi[r]
+
+        return psi_full
+
+
+    # Class debugging random functions
     def show_basis(self):
+
         self.calc_basis()
 
         auxp = np.zeros((len(self.a2rp), self.L + 1))
@@ -761,24 +775,3 @@ class model:
         plt.title('$H$')
         plt.show()
 
-    def expand_psi_to_full_space(self, psi, parity='even'):
-
-        r_to_a, a_to_r = self.get_ar(parity)
-        psi_full = np.zeros(2 ** L, dtype=psi.dtype)
-
-        for r in range(2 ** (self.L - 1)):
-            psi_full[r_to_a[r]] = psi[r]
-
-        return psi_full
-
-if __name__ == '__main__':
-    L = 10;
-    t = 1.0;
-    mu = 0.0;
-    Delta = 1.0
-    V = 0.0
-    m = model(t, V, mu, Delta, L)
-    H = m.calc_Hamiltonian(parity="even")
-    E, psi = np.linalg.eigh(H)
-    rho = m.calc_opdm_from_psi(psi[:, L // 2], parity="even")
-    print(np.linalg.eigvalsh(rho))
