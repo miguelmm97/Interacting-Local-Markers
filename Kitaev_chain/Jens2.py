@@ -627,7 +627,7 @@ class model:
     def expand_psi_to_full_space(self, psi, parity='even'):
 
         r_to_a, a_to_r = self.get_ar(parity)
-        psi_full = np.zeros(2 ** L, dtype=psi.dtype)
+        psi_full = np.zeros(2 ** self.L, dtype=psi.dtype)
 
         for r in range(2 ** (self.L - 1)):
             psi_full[r_to_a[r]] = psi[r]
