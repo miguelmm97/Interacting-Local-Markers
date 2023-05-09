@@ -16,7 +16,9 @@ sigma_y = np.array([[0, -1j], [1j, 0]])
 sigma_z = np.array([[1, 0], [0, -1]])
 
 # Parameter space
-theta_vec = np.linspace(-pi, pi, 100)               # General angle parameter
+theta1 = np.linspace(-pi, 0, 10)
+theta2 = np.linspace(0, pi, 50)
+theta_vec = np.concatenate((theta1, theta2))       # General angle parameter
 t_vec = (1 / np.sqrt(6)) * np.sin(theta_vec)       # Nearest-neighbour hopping
 Delta_vec = (1 / np.sqrt(2)) * np.cos(theta_vec)   # Nearest-neighbour pairing
 Vint_vec = (2 / np.sqrt(6)) * np.sin(theta_vec)    # Nearest-neighbour density-density interactions
@@ -27,7 +29,7 @@ Vint_vec = (2 / np.sqrt(6)) * np.sin(theta_vec)    # Nearest-neighbour density-d
 t2 = 0                                              # Next-to-nearest neighbour hopping
 Delta2 = 0                                          # Next-to-nearest neighbour pairing
 mu = 0                                              # Chemical potential
-lamb = 0.1                                            # Onsite disorder
+lamb = 0.1                                          # Onsite disorder
 L = 12                                              # Length of the chain
 parity = 'even'
 
@@ -47,9 +49,9 @@ for i, (t, Delta, V) in enumerate(zip(t_vec, Delta_vec, Vint_vec)):
     # Hamiltonian
     chain = model(t, t2, V, mu, Delta, Delta2, lamb, L)
     Heven = chain.calc_sparse_Hamiltonian(parity='even', bc='periodic')
-    Eeven, psi_even = eigsh(Heven, k=11, which='SA')
+    Eeven, psi_even = eigsh(Heven, k=5, which='SA')
     Hodd = chain.calc_sparse_Hamiltonian(parity='odd', bc='periodic')
-    Eodd, psi_odd = eigsh(Hodd, k=11, which='SA')
+    Eodd, psi_odd = eigsh(Hodd, k=5, which='SA')
 
     # Select the many-body ground state
     E_full = np.sort(np.concatenate((Eeven, Eodd)))
