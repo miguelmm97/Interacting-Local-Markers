@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import time
 from scipy.sparse.linalg import eigsh
 from numpy.linalg import eigh
-from Jens2 import model, local_marker, spectrum, Ham_bdg, ManyBodySpectrum
+from Jens2 import XYZ, local_marker, spectrum, Ham_bdg, ManyBodySpectrum
 from numpy import pi
 
 start_time = time.time()
@@ -16,22 +16,17 @@ sigma_y = np.array([[0, -1j], [1j, 0]])
 sigma_z = np.array([[1, 0], [0, -1]])
 
 # Parameter space
-theta1 = np.linspace(-pi, 0, 10)
-theta2 = np.linspace(0, pi, 50)
-theta_vec = np.concatenate((theta1, theta2))       # General angle parameter
-t_vec = (1 / np.sqrt(6)) * np.sin(theta_vec)       # Nearest-neighbour hopping
-Delta_vec = (1 / np.sqrt(2)) * np.cos(theta_vec)   # Nearest-neighbour pairing
-Vint_vec = (2 / np.sqrt(6)) * np.sin(theta_vec)    # Nearest-neighbour density-density interactions
-# t_vec = np.linspace(-1, 1, 20)
-# Delta_vec = np.repeat(-1, t_vec.shape[0])
-# Vint_vec = np.repeat(0.1, t_vec.shape[0])
-# t_vec = [1]; Delta_vec = [-1]; Vint_vec = [0]
-t2 = 0                                              # Next-to-nearest neighbour hopping
-Delta2 = 0                                          # Next-to-nearest neighbour pairing
-mu = 0                                              # Chemical potential
-lamb = 0.1                                          # Onsite disorder
-L = 12                                              # Length of the chain
-parity = 'even'
+theta1    = np.linspace(-pi, 0, 10)
+theta2    = np.linspace(0, pi, 50)
+theta_vec = np.concatenate((theta1, theta2))         # General angle parameter
+t_vec     = (2 / np.sqrt(6)) * np.sin(theta_vec)     # Nearest-neighbour hopping
+Delta_vec = (2 / np.sqrt(2)) * np.cos(theta_vec)     # Nearest-neighbour pairing
+Vint_vec  = (2 / np.sqrt(6)) * np.sin(theta_vec)     # Nearest-neighbour density-density interactions
+t2        = 0                                        # Next-to-nearest neighbour hopping
+Delta2    = 0                                        # Next-to-nearest neighbour pairing
+mu        = 0                                        # Chemical potential
+lamb      = 0                                        # Onsite disorder
+L         = 10                                       # Length of the chain
 
 # Definitions
 av_marker = np.zeros(len(t_vec))
@@ -47,10 +42,10 @@ for i, (t, Delta, V) in enumerate(zip(t_vec, Delta_vec, Vint_vec)):
     print('Realisation: {}/{}'.format(i, len(t_vec)))
 
     # Hamiltonian
-    chain = model(t, t2, V, mu, Delta, Delta2, lamb, L)
-    Heven = chain.calc_sparse_Hamiltonian(parity='even', bc='periodic')
+    chain = XYZ(t, t2, V, mu, Delta, Delta2, lamb, L)
+    Heven = chain.calc_sparse_Hamiltonian(parity='even', bc='periodic', dis_links=True)
     Eeven, psi_even = eigsh(Heven, k=5, which='SA')
-    Hodd = chain.calc_sparse_Hamiltonian(parity='odd', bc='periodic')
+    Hodd = chain.calc_sparse_Hamiltonian(parity='odd', bc='periodic', dis_links=True)
     Eodd, psi_odd = eigsh(Hodd, k=5, which='SA')
 
     # Select the many-body ground state
@@ -60,14 +55,7 @@ for i, (t, Delta, V) in enumerate(zip(t_vec, Delta_vec, Vint_vec)):
     else: GS = psi_odd[:, 0]; parity_gs = 'odd'
     GS = GS / np.linalg.norm(GS)
 
-    # H2 = chain.calc_Hamiltonian(parity=parity, bc='periodic')
-    # E02, psi02 = spectrum(H2)
-
     # Single-particle density matrix
-    # n_eig = 0
-    # psi = V[:, n_eig]
-    # psi0 = psi0[:, 0] / np.linalg.norm(psi0)
-    # psi0 = psi0[:, 0] / np.linalg.norm(psi0[:, 0])
     rho = chain.calc_opdm_from_psi(GS, parity=parity_gs)
     values = spectrum(rho)[0]
 

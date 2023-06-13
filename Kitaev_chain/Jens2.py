@@ -230,7 +230,7 @@ def local_marker(L_x, x, P, S, site):
 
 
 @dataclass
-class model:
+class XYZ:
     """ Generates the Hamiltonian for a  disordered Kitaev chain """
 
     t:             float   # nearest neighbor hopping t(c^dagger_i c_{i+1} + h.c)
@@ -240,6 +240,7 @@ class model:
     Delta:         float   # Pairing potential Delta c_i c_{i+1}
     Delta2:        float   # Nest-to-nearest neighbour pairing potential Delta c_i c_{i+2}
     lamb:          float   # Anderson disorder
+    gamma:         float   # Exponent of the max value in the disorder for the links
     L:               int   # Number of sites
 
     def __post_init__(self):
@@ -311,7 +312,7 @@ class model:
         self.a2rm = a_to_rm             # Update maps between the different bases
         self.rm2a = rm_to_a             # Update maps between the different bases
 
-    def calc_Hamiltonian(self, parity='even', bc='periodic'):
+    def calc_Hamiltonian(self, parity='even', bc='periodic', dis_links=False):
         """
         Calculates the Hamiltonian in the even or odd parity sector.
 
@@ -319,10 +320,10 @@ class model:
         ----------
         parity : {string, optional}  Chooses the parity sector that is to be calculated. It can be either 'even' or 'odd'
         bc :     {string, optional} Sets the boundary condition. Can be either 'periodic' or 'open'
-
+        dis_links:  {True or False}  Selects if we want disordered hoppings and interactions
         Returns
         -------
-        H :              {np.array} The Hamiltonian in the given sector with given boundary conditions.
+        H :  {np.array} The Hamiltonian in the given sector with given boundary conditions.
         """
 
         L = self.L
@@ -351,8 +352,14 @@ class model:
 
         # Disorder realisation
         disorder_pot = self.lamb * np.random.uniform(0, 1, size=L)
-        # disorder_hop1 = np.random.uniform(0, 1, size=L)
-        # disorder_pair1 = np.random.uniform(0, 1, size=L)
+        if dis_links:
+            disorder_t = np.random.uniform(0, 1, size=L)
+            disorder_Delta = np.random.uniform(0, 1, size=L)
+            disorder_Vint = np.random.uniform(0, 1, size=L)
+        else:
+            disorder_t = np.ones((L, ))
+            disorder_Delta = np.ones((L, ))
+            disorder_Vint = np.ones((L, ))
 
         # Hamiltonian
         for r in range(dim):
@@ -362,7 +369,7 @@ class model:
             self.Hbasis[r, -1] = r
 
             # Diagonal terms (mu and V terms)
-            H[r, r] += self.V * np.dot(n[:Lhop], np.roll(n, -1)[:Lhop])
+            H[r, r] += self.V * np.dot(disorder_Vint[:Lhop] * n[:Lhop], np.roll(n, -1)[:Lhop])
             H[r, r] += -np.dot(n - 0.5, self.mu * np.ones(L))
             H[r, r] += -np.dot(n, disorder_pot)
 
@@ -374,7 +381,7 @@ class model:
                 try:
                     b, h = hopping(n, i, j)
                     s = a_to_r[b]
-                    ht = -self.t * h  # * disorder_hop1[i]
+                    ht = -self.t * h * disorder_t[i]
                     H[s, r] += ht
                     H[r, s] += np.conjugate(ht)
                 except TypeError:
@@ -384,7 +391,7 @@ class model:
                 try:
                     b, h = pairing(n, i, j)
                     s = a_to_r[b]
-                    hp = -self.Delta * h  # * disorder_pair1[i]
+                    hp = -self.Delta * h * disorder_Delta[i]
                     H[s, r] += hp
                     H[r, s] += np.conjugate(hp)
                 except TypeError:
@@ -416,15 +423,16 @@ class model:
 
         return H
 
-    def calc_sparse_Hamiltonian(self, parity='even', bc='periodic'):
+    def calc_sparse_Hamiltonian(self, parity='even', bc='periodic', dis_links=False):
 
         """
         Calculates the sparse Hamiltonian in the even or odd parity sector.
 
         Parameters
         ----------
-        parity : {string, optional}  Chooses the parity sector that is to be calculated. It can be either 'even' or 'odd'
-        bc :     {string, optional} Sets the boundary condition. Can be either 'periodic' or 'open'
+        parity :   {string, optional}  Chooses the parity sector that is to be calculated. It can be either 'even' or 'odd'
+        bc :       {string, optional} Sets the boundary condition. Can be either 'periodic' or 'open'
+        dis_links:    {True or False}  Selects if we want disordered hoppings and interactions
 
         Returns
         -------
@@ -457,8 +465,14 @@ class model:
 
         # Disorder realisation
         disorder_pot = self.lamb * np.random.uniform(0, 1, size=L)
-        # disorder_hop1 = np.random.uniform(0, 1, size=L)
-        # disorder_pair1 = np.random.uniform(0, 1, size=L)
+        if dis_links:
+            disorder_t = np.random.uniform(0, 1, size=L)
+            disorder_Delta = np.random.uniform(0, 1, size=L)
+            disorder_Vint = np.random.uniform(0, 1, size=L)
+        else:
+            disorder_t = np.ones((L, ))
+            disorder_Delta = np.ones((L, ))
+            disorder_Vint = np.ones((L, ))
 
         # Hamiltonian
         for r in range(dim):
@@ -468,7 +482,7 @@ class model:
             self.Hbasis[r, -1] = r
 
             # Diagonal terms (mu and V terms)
-            H[r, r] += self.V * np.dot(n[:Lhop], np.roll(n, -1)[:Lhop])
+            H[r, r] += self.V * np.dot(disorder_Vint[:Lhop] * n[:Lhop], np.roll(n, -1)[:Lhop])
             H[r, r] += -np.dot(n - 0.5, self.mu * np.ones(L))
             H[r, r] += -np.dot(n, disorder_pot)
 
@@ -480,7 +494,7 @@ class model:
                 try:
                     b, h = hopping(n, i, j)
                     s = a_to_r[b]
-                    ht = -self.t * h  # * disorder_hop1[i]
+                    ht = -self.t * h  * disorder_t[i]
                     H[s, r] += ht
                     H[r, s] += np.conjugate(ht)
                 except TypeError:
@@ -490,7 +504,7 @@ class model:
                 try:
                     b, h = pairing(n, i, j)
                     s = a_to_r[b]
-                    hp = -self.Delta * h  # * disorder_pair1[i]
+                    hp = -self.Delta * h  * disorder_Delta[i]
                     H[s, r] += hp
                     H[r, s] += np.conjugate(hp)
                 except TypeError:
@@ -774,4 +788,358 @@ class model:
         plt.ylabel("Energy")
         plt.title('$H$')
         plt.show()
+
+
+
+
+@dataclass
+class XYZmajorana:
+
+    """ Generates the Hamiltonian for a disordered XYZ/Majorana """
+
+    X:     float    # Strength of spin coupling in x direction
+    Y:     float    # Strength of spin coupling in y direction
+    Z:     float    # Strength of spin coupling in z direction
+    gamma: float    # Exponent of the maximum value for the distribution of X and Y
+    L:     int      # Number of sites
+
+    def __post_init__(self):
+        self.calc_basis()
+
+    # Class methods
+    def get_ar(self, parity='even'):
+        """
+        Selects the parity sector of the Hilbert space
+
+        Params:
+        ------
+        parity: {string} Selects 'even' or 'odd' parity sector
+
+        Returns:
+        -------
+        r_to_a, a_to_r : {list} Lists that map parity sectors with the full Hilbert space
+        """
+
+        if parity == 'even':
+            r_to_a = self.rp2a
+            a_to_r = self.a2rp
+        elif parity == 'odd':
+            r_to_a = self.rm2a
+            a_to_r = self.a2rm
+        else:
+            raise ValueError('parity must be "even" or "odd"')
+
+        return r_to_a, a_to_r
+
+    def calc_basis(self):
+        """
+        Separates the full Hilbert space into even and odd sectors.
+        The "a" integer runs over all integers, while the rp = 0,..., 2^{L-1}-1
+        indices the basis states of the even sector, and rm similarily the odd sector
+        The mapping between the two set if integers is given by a_to_rp and rp_to_a
+        and similar for a_to_rm and rm_to_a.
+
+        Returns
+        -------
+        None.
+
+        """
+        L = self.L
+        a_to_rp = {}                    # Map from the binary basis to the parity basis
+        a_to_rm = {}                    # Map from the binary basis to the parity basis
+        rp_to_a = {}                    # Map from parity basis to the binary basis
+        rm_to_a = {}                    # Map from parity basis to the binary basis
+        rp = 0                          # Dimension counting for the parity sector
+        rm = 0                          # Dimension counting for the parity sector
+
+        for a in range(2 ** L):
+
+            n_a = bin_to_n(a, L)        # Occupation number representation of state a
+
+            # Even parity sector
+            if np.sum(n_a) % 2 == 0:
+                a_to_rp[a] = rp
+                rp_to_a[rp] = a
+                rp += 1
+            # Odd parity sector
+            else:
+                a_to_rm[a] = rm
+                rm_to_a[rm] = a
+                rm += 1
+
+        self.a2rp = a_to_rp             # Update maps between the different bases
+        self.rp2a = rp_to_a             # Update maps between the different bases
+        self.a2rm = a_to_rm             # Update maps between the different bases
+        self.rm2a = rm_to_a             # Update maps between the different bases
+
+    def calc_Hamiltonian(self, parity='even', bc='periodic'):
+        """
+        Calculates the Hamiltonian in the even or odd parity sector.
+
+        Parameters
+        ----------
+        parity : {string, optional}  Chooses the parity sector that is to be calculated. It can be either 'even' or 'odd'
+        bc :     {string, optional} Sets the boundary condition. Can be either 'periodic' or 'open'
+        dis_links:  {True or False}  Selects if we want disordered hoppings and interactions
+        Returns
+        -------
+        H :  {np.array} The Hamiltonian in the given sector with given boundary conditions.
+        """
+
+        L = self.L
+        dim = 2 ** (L - 1)
+        H = np.zeros((dim, dim))
+
+        # Parity sector
+        if parity == 'even':
+            r_to_a = self.rp2a
+            a_to_r = self.a2rp
+            self.Hbasis = np.zeros((len(self.a2rp), self.L + 1))
+        elif parity == 'odd':
+            r_to_a = self.rm2a
+            a_to_r = self.a2rm
+            self.Hbasis = np.zeros((len(self.a2rm), self.L + 1))
+        else: raise ValueError('parity must be "even" or "odd"')
+
+        # Boundary conditions
+        if bc == 'periodic':
+            Lhop = L
+            Lhop2 = L
+        elif bc == 'open':
+            Lhop = L - 1
+            Lhop2 = L - 2
+        else: raise ValueError('boundary condition must be "periodic" or "open"')
+
+        # Disorder realisation
+        disX = self.X * np.random.uniform(0, np.exp(0.5 * self.gamma), size=L)
+        disY = self.Y * np.random.uniform(0, np.exp(-0.5 * self.gamma), size=L)
+        dis_t = disX + disY
+        dis_delta = disX - disY
+
+        # Hamiltonian
+        for r in range(dim):
+            a = r_to_a[r]
+            n = bin_to_n(a, L)
+
+            # Diagonal terms (mu and V terms)
+            H[r, r] += self.Z * np.dot(n[:Lhop], np.roll(n, -1)[:Lhop])
+
+            # Nearest-neighbour terms
+            for i in range(Lhop):
+                j = np.mod(i + 1, Lhop)  # j is either i+1 or 0
+
+                # Hopping term
+                try:
+                    b, h = hopping(n, i, j)
+                    s = a_to_r[b]
+                    ht = - h * dis_t[i]
+                    H[s, r] += ht
+                    H[r, s] += np.conjugate(ht)
+                except TypeError:
+                    pass
+
+                # Pairing term
+                try:
+                    b, h = pairing(n, i, j)
+                    s = a_to_r[b]
+                    hp = - h * dis_delta[i]
+                    H[s, r] += hp
+                    H[r, s] += np.conjugate(hp)
+                except TypeError:
+                    pass
+
+        return H
+
+    def calc_sparse_Hamiltonian(self, parity='even', bc='periodic'):
+
+        """
+        Calculates the sparse Hamiltonian in the even or odd parity sector.
+
+        Parameters
+        ----------
+        parity :   {string, optional}  Chooses the parity sector that is to be calculated. It can be either 'even' or 'odd'
+        bc :       {string, optional} Sets the boundary condition. Can be either 'periodic' or 'open'
+        dis_links:    {True or False}  Selects if we want disordered hoppings and interactions
+
+        Returns
+        -------
+        H :            b{sparse.csr} The Hamiltonian in the given sector with given boundary conditions.
+        """
+
+        L = self.L
+        dim = 2 ** (L - 1)
+        H = sparse.lil_matrix((dim, dim))
+
+        # Parity sector
+        if parity == 'even':
+            r_to_a = self.rp2a
+            a_to_r = self.a2rp
+            self.Hbasis = np.zeros((len(self.a2rp), self.L + 1))
+        elif parity == 'odd':
+            r_to_a = self.rm2a
+            a_to_r = self.a2rm
+            self.Hbasis = np.zeros((len(self.a2rm), self.L + 1))
+        else: raise ValueError('parity must be "even" or "odd"')
+
+        # Boundary conditions
+        if bc == 'periodic':
+            Lhop = L
+            Lhop2 = L
+        elif bc == 'open':
+            Lhop = L - 1
+            Lhop2 = L - 2
+        else: raise ValueError('boundary condition must be "periodic" or "open"')
+
+        # Disorder realisation
+        disX = self.X * np.random.uniform(0, np.exp(0.5 * self.gamma), size=L)
+        disY = self.Y * np.random.uniform(0, np.exp(-0.5 * self.gamma), size=L)
+        dis_t = disX + disY
+        dis_delta = disX - disY
+
+        # Hamiltonian
+        for r in range(dim):
+            a = r_to_a[r]
+            n = bin_to_n(a, L)
+
+            # Diagonal terms (mu and V terms)
+            H[r, r] += self.Z * np.dot(n[:Lhop], np.roll(n, -1)[:Lhop])
+
+            # Nearest-neighbour terms
+            for i in range(Lhop):
+                j = np.mod(i + 1, Lhop)  # j is either i+1 or 0
+
+                # Hopping term
+                try:
+                    b, h = hopping(n, i, j)
+                    s = a_to_r[b]
+                    ht = - h * dis_t[i]
+                    H[s, r] += ht
+                    H[r, s] += np.conjugate(ht)
+                except TypeError:
+                    pass
+
+                # Pairing term
+                try:
+                    b, h = pairing(n, i, j)
+                    s = a_to_r[b]
+                    hp = - h * dis_delta[i]
+                    H[s, r] += hp
+                    H[r, s] += np.conjugate(hp)
+                except TypeError:
+                    pass
+
+        return H.tocsr()
+
+    def calc_opdm_operator(self, parity='even'):
+        """
+        Calculates the matrix rho_ij = <r|c_i^dagger c_j|s>
+        and <r|c_i c_j|s> in subspace of even or odd parity.
+        rho['even/odd'][i,j] = rho_ij
+        with rho_ij a sparse matrix.
+
+        Parameters
+        ----------
+        parity : string, optional
+            The parity of the basis for rho. The default is 'even'.
+
+
+        Returns
+        -------
+        None. But sets self.rho to rho.
+
+        """
+        L = self.L
+        dim = 2 ** (L - 1)
+        rho = {'eh': {}, 'hh': {}}
+
+        # Initializing rho_eh operator as a lil_matrix
+        for i, j in itertools.product(range(L), range(L)):
+            rho['eh'][i, j] = sparse.lil_matrix((dim, dim))
+            rho['hh'][i, j] = sparse.lil_matrix((dim, dim))
+
+        # Parity sector
+        if parity == 'even':
+            r_to_a = self.rp2a
+            a_to_r = self.a2rp
+        elif parity == 'odd':
+            r_to_a = self.rm2a
+            a_to_r = self.a2rm
+        else: raise ValueError('parity must be "even" or "odd"')
+
+        # Calculation of the matrix rho in the parity subspace
+        for r in range(dim):
+
+            # State r in the different basis
+            a = r_to_a[r]                                            # Binary
+            n = bin_to_n(a, L)                                       # Number representation
+
+            # Iterate over the possible ij combinations
+            for i, j in itertools.product(range(L), range(L)):
+
+                # Electron-hole block
+                try:
+                    b, alpha = hopping(n, i, j)                      # c_i^\dagger c_j /r>
+                    rho['eh'][i, j][a_to_r[b], r] = alpha            # <b/ c^\dagger c/ r>
+                except TypeError:
+                    pass
+
+                # Hole-hole block
+                try:
+                    b, alpha = pairing(n, i, j)                      # c_i c_j /r>
+                    rho['hh'][i, j][a_to_r[b], r] = alpha            # <b/ c^\dagger c/ r>
+                except TypeError:
+                    pass
+
+        # Convert sparse lil matrices to csr
+        self.rho = {'eh': {}, 'hh': {}}
+        for key in rho['eh']:
+            self.rho['eh'][key] = rho['eh'][key].tocsr()
+            self.rho['hh'][key] = rho['hh'][key].tocsr()
+
+        return None
+
+    def calc_opdm_from_psi(self, psi, parity='even'):
+        """
+        Calculates the one-particle-density matrix from a state psi.
+
+        rho_opdm =  [[ <psi|c^\dagger_i c_j|psi> , <psi|c^\dagger_i c^\dagger_j|psi>],
+                     [          <psi|c_i c_j|psi>,   <psi|c_i c^\dagger_j|psi> ]]
+
+        Parameters
+        ----------
+        psi : numpy arrary
+            The state for which we want the opdm.
+        parity : TYPE, optional
+            the parity of the subspace in which the state lives. The default is 'even'.
+
+        Returns
+        -------
+        rho_opdm : numpy array 2L x 2L
+            the opdm.
+        """
+
+        if not hasattr(self, 'rho'):
+            self.calc_opdm_operator(parity)
+
+        L = self.L
+        rho_opdm = np.zeros((2 * L, 2 * L))
+
+        for i, j in itertools.product(range(L), range(L)):
+            rho_opdm[i, j] = np.dot(psi.conjugate(), (self.rho['eh'][i, j] * psi))
+            rho_opdm[i + L, j] = np.dot(psi.conjugate(), (self.rho['hh'][i, j] * psi))
+        rho_opdm[L: 2 * L, L: 2 * L] = np.eye(L) - rho_opdm[:L, :L]  # .T
+        rho_opdm[:L, L:2 * L] = rho_opdm[L: 2 * L, :L].T.conjugate()
+
+        return rho_opdm
+
+    def expand_psi_to_full_space(self, psi, parity='even'):
+
+        r_to_a, a_to_r = self.get_ar(parity)
+        psi_full = np.zeros(2 ** self.L, dtype=psi.dtype)
+
+        for r in range(2 ** (self.L - 1)):
+            psi_full[r_to_a[r]] = psi[r]
+
+        return psi_full
+
 
