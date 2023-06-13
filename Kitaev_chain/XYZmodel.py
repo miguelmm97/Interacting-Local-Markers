@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import time
 from scipy.sparse.linalg import eigsh
 from numpy.linalg import eigh
-from Jens2 import XYZ, local_marker, spectrum, Ham_bdg, ManyBodySpectrum
+from XYZmajorana_class import XYZ, local_marker, spectrum, Ham_bdg, ManyBodySpectrum
 from numpy import pi
 
 start_time = time.time()

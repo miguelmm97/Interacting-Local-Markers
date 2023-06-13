@@ -789,9 +789,6 @@ class XYZ:
         plt.title('$H$')
         plt.show()
 
-
-
-
 @dataclass
 class XYZmajorana:
 

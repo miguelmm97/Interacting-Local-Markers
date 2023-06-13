@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.sparse.linalg import eigsh
 from numpy.linalg import eigh
-from Jens2 import model, local_marker, spectrum
+from XYZmajorana_class import model, local_marker, spectrum
 from numpy import pi
 import argparse
 import h5py
