@@ -228,6 +228,109 @@ def local_marker(L_x, x, P, S, site):
 
     return marker
 
+def QuantileCalc(data, percentage, tol):
+    """
+    Calculates the minimum spreading of a fixed quantile percentage.
+
+    Parameters
+    ----------
+    data : Data pints, rows are the parameters over which the data is calculated, colums are samples
+    percentage: float <1 that indicates the total percentage of the data contained between the quantiles
+    tol: tolerance before convergence
+
+    Returns
+    -------
+    total_quantile_bottom, total_quantile_top: quantiles wit dimensions data[:, 0]
+    """
+
+    total_quantile_bottom = 10 * np.ones((data.shape[0], ))
+    total_quantile_top = 10 * np.ones((data.shape[0],))
+
+    for i in range(data.shape[0]):
+
+        # Initial parameters for each parameter point
+        nstep = 25
+        qbottom = 0; qtop = 0
+        diff1 = np.abs(total_quantile_bottom[i] - qbottom)
+        diff2 = np.abs(total_quantile_top[i] - qtop)
+
+        # Iterate until convergence
+        while diff1 > tol and diff2 > tol:
+            q1_vec = np.linspace(0, 1 - percentage, nstep)
+            q2_vec = np.linspace(percentage, 1, nstep)
+            q_diff = 10
+
+            # Minimum spreading of the quantiles
+            for j, (q1, q2) in enumerate(zip(q1_vec, q2_vec)):
+                aux1 = np.quantile(data[i, :], q1)
+                aux2 = np.quantile(data[i, :], q2)
+                if (aux2 - aux1) < q_diff:
+                    q_diff = aux2 - aux1
+                    qbottom = aux1
+                    qtop = aux2
+
+            nstep = nstep * 2
+            diff1 = np.abs(np.abs(total_quantile_bottom[i]) - np.abs(qbottom))
+            diff2 = np.abs(np.abs(total_quantile_top[i]) - np.abs(qtop))
+            total_quantile_bottom[i] = qbottom
+            total_quantile_top[i] = qtop
+
+    return total_quantile_bottom, total_quantile_top
+        
+def ErrorCalc(data, percentage, n_intervals, tol):
+    """
+    Calculates the minimum spreading of the errors in data.
+
+    Parameters
+    ----------
+    data : Data pints, rows are the parameters over which the data is calculated, colums are samples
+    percentage: float <1 that indicates the total percentage of the data contained between the quantiles
+    tol: tolerance before convergence
+
+    Returns
+    -------
+    total_error_bottom, total_error_top: quantiles wit dimensions data[:, 0]
+    """
+    total_error_bottom = 10 * np.ones((data.shape[0],))
+    total_error_top = 10 * np.ones((data.shape[0],))
+    
+    for i in range(data.shape[0]):
+
+        # Sample intervals from the data to calculate the median distribution
+        sample_medians = np.zeros((n_intervals, ))
+        for j in range(n_intervals):
+            indexes = np.random.randint(data.shape[1], size=int(data.shape[1] / 2))
+            sample_medians[j] = np.median(data[i, indexes])
+
+        # Convergence to a minimum value
+        nstep = 5; qbottom = 0; qtop = 0
+        diff1 = 10; diff2 = 10
+
+        while diff1 > tol and diff2 > tol:
+            q1_vec = np.linspace(0, 1 - percentage, nstep)
+            q2_vec = np.linspace(percentage, 1, nstep)
+            q_diff = 10
+
+            # Minimum spreading of the quantiles
+            for z, (q1, q2) in enumerate(zip(q1_vec, q2_vec)):
+                aux1 = np.quantile(sample_medians, q1)
+                aux2 = np.quantile(sample_medians, q2)
+                if (aux2 - aux1) < q_diff:
+                    q_diff = aux2 - aux1
+                    qbottom = aux1
+                    qtop = aux2
+
+            nstep = nstep * 2
+            diff1 = np.abs(np.abs(total_error_bottom[i]) - np.abs(qbottom))
+            diff2 = np.abs(np.abs(total_error_top[i]) - np.abs(qtop))
+            total_error_bottom[i] = qbottom
+            total_error_top[i] = qtop
+        
+    return total_error_bottom, total_error_top
+
+
+
+
 
 @dataclass
 class XYZ:
@@ -869,6 +972,373 @@ class XYZmajorana:
         self.a2rm = a_to_rm             # Update maps between the different bases
         self.rm2a = rm_to_a             # Update maps between the different bases
 
+    def calc_Hamiltonian(self, parity='even', bc='periodic', dis_X=None, dis_Y=None):
+        """
+        Calculates the Hamiltonian in the even or odd parity sector.
+
+        Parameters
+        ----------
+        parity : {string, optional}  Chooses the parity sector that is to be calculated. It can be either 'even' or 'odd'
+        bc :     {string, optional} Sets the boundary condition. Can be either 'periodic' or 'open'
+        dis_links:  {True or False}  Selects if we want disordered hoppings and interactions
+        Returns
+        -------
+        H :  {np.array} The Hamiltonian in the given sector with given boundary conditions.
+        """
+
+        L = self.L
+        dim = 2 ** (L - 1)
+        H = np.zeros((dim, dim))
+
+        # Parity sector
+        if parity == 'even':
+            r_to_a = self.rp2a
+            a_to_r = self.a2rp
+            self.Hbasis = np.zeros((len(self.a2rp), self.L + 1))
+        elif parity == 'odd':
+            r_to_a = self.rm2a
+            a_to_r = self.a2rm
+            self.Hbasis = np.zeros((len(self.a2rm), self.L + 1))
+        else: raise ValueError('parity must be "even" or "odd"')
+
+        # Boundary conditions
+        if bc == 'periodic':
+            Lhop = L
+            Lhop2 = L
+        elif bc == 'open':
+            Lhop = L - 1
+            Lhop2 = L - 2
+        else: raise ValueError('boundary condition must be "periodic" or "open"')
+
+        # Disorder realisation
+        if dis_X is None:
+            disX = self.X * np.random.uniform(0, np.exp(0.5 * self.gamma), size=L)
+        else:
+            disX = dis_X
+
+        if dis_Y is None:
+            disY = self.Y * np.random.uniform(0, np.exp(-0.5 * self.gamma), size=L)
+        else:
+            disY = dis_Y
+
+        dis_t = disX + disY
+        dis_delta = disX - disY
+
+        # Hamiltonian
+        for r in range(dim):
+            a = r_to_a[r]
+            n = bin_to_n(a, L)
+
+            # Diagonal terms (mu and V terms)
+            H[r, r] += self.Z * np.dot(n[:Lhop], np.roll(n, -1)[:Lhop])
+
+            # Nearest-neighbour terms
+            for i in range(Lhop):
+                j = np.mod(i + 1, Lhop)  # j is either i+1 or 0
+
+                # Hopping term
+                try:
+                    b, h = hopping(n, i, j)
+                    s = a_to_r[b]
+                    ht = - h * dis_t[i]
+                    H[s, r] += ht
+                    H[r, s] += np.conjugate(ht)
+                except TypeError:
+                    pass
+
+                # Pairing term
+                try:
+                    b, h = pairing(n, i, j)
+                    s = a_to_r[b]
+                    hp = - h * dis_delta[i]
+                    H[s, r] += hp
+                    H[r, s] += np.conjugate(hp)
+                except TypeError:
+                    pass
+
+        return H
+
+    def calc_sparse_Hamiltonian(self, parity='even', bc='periodic', dis_X=None, dis_Y=None):
+
+        """
+        Calculates the sparse Hamiltonian in the even or odd parity sector.
+
+        Parameters
+        ----------
+        parity :   {string, optional}  Chooses the parity sector that is to be calculated. It can be either 'even' or 'odd'
+        bc :       {string, optional} Sets the boundary condition. Can be either 'periodic' or 'open'
+        dis_links:    {True or False}  Selects if we want disordered hoppings and interactions
+
+        Returns
+        -------
+        H :            b{sparse.csr} The Hamiltonian in the given sector with given boundary conditions.
+        """
+
+        L = self.L
+        dim = 2 ** (L - 1)
+        H = sparse.lil_matrix((dim, dim))
+
+        # Parity sector
+        if parity == 'even':
+            r_to_a = self.rp2a
+            a_to_r = self.a2rp
+            self.Hbasis = np.zeros((len(self.a2rp), self.L + 1))
+        elif parity == 'odd':
+            r_to_a = self.rm2a
+            a_to_r = self.a2rm
+            self.Hbasis = np.zeros((len(self.a2rm), self.L + 1))
+        else: raise ValueError('parity must be "even" or "odd"')
+
+        # Boundary conditions
+        if bc == 'periodic':
+            Lhop = L
+            Lhop2 = L
+        elif bc == 'open':
+            Lhop = L - 1
+            Lhop2 = L - 2
+        else: raise ValueError('boundary condition must be "periodic" or "open"')
+
+        # Disorder realisation
+        if dis_X is None:
+            disX = self.X * np.random.uniform(0, np.exp(0.5 * self.gamma), size=L)
+        else:
+            disX = dis_X
+
+        if dis_Y is None:
+            disY = self.Y * np.random.uniform(0, np.exp(-0.5 * self.gamma), size=L)
+        else:
+            disY = dis_Y
+
+        dis_t = disX + disY
+        dis_delta = disX - disY
+
+        # Hamiltonian
+        for r in range(dim):
+            a = r_to_a[r]
+            n = bin_to_n(a, L)
+
+            # Diagonal terms (mu and V terms)
+            H[r, r] += self.Z * np.dot(n[:Lhop], np.roll(n, -1)[:Lhop])
+
+            # Nearest-neighbour terms
+            for i in range(Lhop):
+                j = np.mod(i + 1, Lhop)  # j is either i+1 or 0
+
+                # Hopping term
+                try:
+                    b, h = hopping(n, i, j)
+                    s = a_to_r[b]
+                    ht = - h * dis_t[i]
+                    H[s, r] += ht
+                    H[r, s] += np.conjugate(ht)
+                except TypeError:
+                    pass
+
+                # Pairing term
+                try:
+                    b, h = pairing(n, i, j)
+                    s = a_to_r[b]
+                    hp = - h * dis_delta[i]
+                    H[s, r] += hp
+                    H[r, s] += np.conjugate(hp)
+                except TypeError:
+                    pass
+
+        return H.tocsr(), disX, disY
+
+    def calc_opdm_operator(self, parity='even'):
+        """
+        Calculates the matrix rho_ij = <r|c_i^dagger c_j|s>
+        and <r|c_i c_j|s> in subspace of even or odd parity.
+        rho['even/odd'][i,j] = rho_ij
+        with rho_ij a sparse matrix.
+
+        Parameters
+        ----------
+        parity : string, optional
+            The parity of the basis for rho. The default is 'even'.
+
+
+        Returns
+        -------
+        None. But sets self.rho to rho.
+
+        """
+        L = self.L
+        dim = 2 ** (L - 1)
+        rho = {'eh': {}, 'hh': {}}
+
+        # Initializing rho_eh operator as a lil_matrix
+        for i, j in itertools.product(range(L), range(L)):
+            rho['eh'][i, j] = sparse.lil_matrix((dim, dim))
+            rho['hh'][i, j] = sparse.lil_matrix((dim, dim))
+
+        # Parity sector
+        if parity == 'even':
+            r_to_a = self.rp2a
+            a_to_r = self.a2rp
+        elif parity == 'odd':
+            r_to_a = self.rm2a
+            a_to_r = self.a2rm
+        else: raise ValueError('parity must be "even" or "odd"')
+
+        # Calculation of the matrix rho in the parity subspace
+        for r in range(dim):
+
+            # State r in the different basis
+            a = r_to_a[r]                                            # Binary
+            n = bin_to_n(a, L)                                       # Number representation
+
+            # Iterate over the possible ij combinations
+            for i, j in itertools.product(range(L), range(L)):
+
+                # Electron-hole block
+                try:
+                    b, alpha = hopping(n, i, j)                      # c_i^\dagger c_j /r>
+                    rho['eh'][i, j][a_to_r[b], r] = alpha            # <b/ c^\dagger c/ r>
+                except TypeError:
+                    pass
+
+                # Hole-hole block
+                try:
+                    b, alpha = pairing(n, i, j)                      # c_i c_j /r>
+                    rho['hh'][i, j][a_to_r[b], r] = alpha            # <b/ c^\dagger c/ r>
+                except TypeError:
+                    pass
+
+        # Convert sparse lil matrices to csr
+        self.rho = {'eh': {}, 'hh': {}}
+        for key in rho['eh']:
+            self.rho['eh'][key] = rho['eh'][key].tocsr()
+            self.rho['hh'][key] = rho['hh'][key].tocsr()
+
+        return None
+
+    def calc_opdm_from_psi(self, psi, parity='even'):
+        """
+        Calculates the one-particle-density matrix from a state psi.
+
+        rho_opdm =  [[ <psi|c^\dagger_i c_j|psi> , <psi|c^\dagger_i c^\dagger_j|psi>],
+                     [          <psi|c_i c_j|psi>,   <psi|c_i c^\dagger_j|psi> ]]
+
+        Parameters
+        ----------
+        psi : numpy arrary
+            The state for which we want the opdm.
+        parity : TYPE, optional
+            the parity of the subspace in which the state lives. The default is 'even'.
+
+        Returns
+        -------
+        rho_opdm : numpy array 2L x 2L
+            the opdm.
+        """
+
+        if not hasattr(self, 'rho'):
+            self.calc_opdm_operator(parity)
+
+        L = self.L
+        rho_opdm = np.zeros((2 * L, 2 * L))
+
+        for i, j in itertools.product(range(L), range(L)):
+            rho_opdm[i, j] = np.dot(psi.conjugate(), (self.rho['eh'][i, j] * psi))
+            rho_opdm[i + L, j] = np.dot(psi.conjugate(), (self.rho['hh'][i, j] * psi))
+        rho_opdm[L: 2 * L, L: 2 * L] = np.eye(L) - rho_opdm[:L, :L]  # .T
+        rho_opdm[:L, L:2 * L] = rho_opdm[L: 2 * L, :L].T.conjugate()
+
+        return rho_opdm
+
+    def expand_psi_to_full_space(self, psi, parity='even'):
+
+        r_to_a, a_to_r = self.get_ar(parity)
+        psi_full = np.zeros(2 ** self.L, dtype=psi.dtype)
+
+        for r in range(2 ** (self.L - 1)):
+            psi_full[r_to_a[r]] = psi[r]
+
+        return psi_full
+
+
+@dataclass
+class XYZmajorana_anderson:
+
+    """ Generates the Hamiltonian for a disordered XYZ/Majorana """
+
+    X:     float    # Strength of spin coupling in x direction
+    Y:     float    # Strength of spin coupling in y direction
+    Z:     float    # Strength of spin coupling in z direction
+    gamma: float    # Exponent of the maximum value for the distribution of X and Y
+    L:     int      # Number of sites
+
+    def __post_init__(self):
+        self.calc_basis()
+
+    # Class methods
+    def get_ar(self, parity='even'):
+        """
+        Selects the parity sector of the Hilbert space
+
+        Params:
+        ------
+        parity: {string} Selects 'even' or 'odd' parity sector
+
+        Returns:
+        -------
+        r_to_a, a_to_r : {list} Lists that map parity sectors with the full Hilbert space
+        """
+
+        if parity == 'even':
+            r_to_a = self.rp2a
+            a_to_r = self.a2rp
+        elif parity == 'odd':
+            r_to_a = self.rm2a
+            a_to_r = self.a2rm
+        else:
+            raise ValueError('parity must be "even" or "odd"')
+
+        return r_to_a, a_to_r
+
+    def calc_basis(self):
+        """
+        Separates the full Hilbert space into even and odd sectors.
+        The "a" integer runs over all integers, while the rp = 0,..., 2^{L-1}-1
+        indices the basis states of the even sector, and rm similarily the odd sector
+        The mapping between the two set if integers is given by a_to_rp and rp_to_a
+        and similar for a_to_rm and rm_to_a.
+
+        Returns
+        -------
+        None.
+
+        """
+        L = self.L
+        a_to_rp = {}                    # Map from the binary basis to the parity basis
+        a_to_rm = {}                    # Map from the binary basis to the parity basis
+        rp_to_a = {}                    # Map from parity basis to the binary basis
+        rm_to_a = {}                    # Map from parity basis to the binary basis
+        rp = 0                          # Dimension counting for the parity sector
+        rm = 0                          # Dimension counting for the parity sector
+
+        for a in range(2 ** L):
+
+            n_a = bin_to_n(a, L)        # Occupation number representation of state a
+
+            # Even parity sector
+            if np.sum(n_a) % 2 == 0:
+                a_to_rp[a] = rp
+                rp_to_a[rp] = a
+                rp += 1
+            # Odd parity sector
+            else:
+                a_to_rm[a] = rm
+                rm_to_a[rm] = a
+                rm += 1
+
+        self.a2rp = a_to_rp             # Update maps between the different bases
+        self.rp2a = rp_to_a             # Update maps between the different bases
+        self.a2rm = a_to_rm             # Update maps between the different bases
+        self.rm2a = rm_to_a             # Update maps between the different bases
+
     def calc_Hamiltonian(self, parity='even', bc='periodic'):
         """
         Calculates the Hamiltonian in the even or odd parity sector.
@@ -988,8 +1458,8 @@ class XYZmajorana:
         else: raise ValueError('boundary condition must be "periodic" or "open"')
 
         # Disorder realisation
-        disX = self.X * np.random.uniform(0, np.exp(0.5 * self.gamma), size=L)
-        disY = self.Y * np.random.uniform(0, np.exp(-0.5 * self.gamma), size=L)
+        disX = self.X * np.random.uniform(-self.gamma, self.gamma, size=L)
+        disY = self.Y * np.random.uniform(-self.gamma, self.gamma, size=L)
         dis_t = disX + disY
         dis_delta = disX - disY
 
@@ -1138,5 +1608,3 @@ class XYZmajorana:
             psi_full[r_to_a[r]] = psi[r]
 
         return psi_full
-
-

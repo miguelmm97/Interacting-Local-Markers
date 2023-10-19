@@ -15,7 +15,7 @@ gamma_vec = np.linspace(-8, 8, 80)    # Exponent of the maximum value for the XY
 X         = 1                         # X coupling
 Y         = 1                         # Y coupling
 Z         = 10                        # Z coupling
-L         = 12                        # Length of the chain
+L         = 8                         # Length of the chain
 
 # Definitions
 av_marker = np.zeros(len(gamma_vec))
@@ -35,9 +35,9 @@ for i, gamma in enumerate(gamma_vec):
 
     # Hamiltonian
     chain = XYZmajorana(X, Y, Z, gamma, L)
-    Heven = chain.calc_sparse_Hamiltonian(parity='even', bc='periodic')
+    Heven, disX, disY = chain.calc_sparse_Hamiltonian(parity='even', bc='periodic')
     Eeven, psi_even = eigsh(Heven, k=5, which='SA')
-    Hodd = chain.calc_sparse_Hamiltonian(parity='odd', bc='periodic')
+    Hodd = chain.calc_sparse_Hamiltonian(parity='odd', bc='periodic', dis_X=disX, dis_Y=disY)[0]
     Eodd, psi_odd = eigsh(Hodd, k=5, which='SA')
 
     # Select the many-body ground state
