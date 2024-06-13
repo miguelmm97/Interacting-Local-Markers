@@ -103,7 +103,7 @@ ax.yaxis.set_major_locator(ticker.FixedLocator(majorsy))
 ax.yaxis.set_minor_locator(ticker.FixedLocator(minorsy))
 ax.xaxis.set_major_locator(ticker.FixedLocator(majorsx))
 ax.xaxis.set_minor_locator(ticker.FixedLocator(minorsx))
-ax.set_ylabel("$\\nu$", fontsize=20)
+ax.set_ylabel("$\\tilde \\nu$", fontsize=20)
 ax.set_xlabel("$\delta$", fontsize=20)
 ax.text(-4.75, -0.2, '$L$', fontsize=16)
 ax.legend(bbox_to_anchor=(0.29, 0.32), ncol=1, frameon=False, fontsize=16) # bbox_to_anchor=(0.98, 0.6),

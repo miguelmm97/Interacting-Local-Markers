@@ -109,6 +109,7 @@ ax1.set_ylabel("$P(\\nu)$", fontsize=33)
 ax1.text(0.85, 70, '$L$', fontsize=23)
 ax1.text(0.7, 6.8, '$\delta=2.8$', fontsize=23)
 ax1.legend(bbox_to_anchor=(0.7, 0.95), loc='upper left', ncol=1, frameon=False, fontsize=23)  # bbox_to_anchor=(0.98, 0.6)
+ax1.text(-0.438, 67.7, '$(a)$', fontsize=23)
 
 left, bottom, width, height = [0.15, 0.5, 0.4, 0.4]
 inset_ax1 = ax1.inset_axes([left, bottom, width, height])
@@ -180,7 +181,7 @@ ax2.tick_params(which='minor', length=7, direction='in', top=True, right=True)
 # ax2.text(0.87, 500, '$L$', fontsize=20)
 ax2.text(0.8, 30, '$\delta=3.6$', fontsize=23)
 # ax2.legend(bbox_to_anchor=(0.7, 0.92), loc='upper left', ncol=1, frameon=False, fontsize=16)  # bbox_to_anchor=(0.98, 0.6)
-
+ax2.text(0.037, 590, '$(b)$', fontsize=23)
 
 left, bottom, width, height = [0.15, 0.5, 0.4, 0.4]
 inset_ax2 = ax2.inset_axes([left, bottom, width, height])
@@ -246,6 +247,7 @@ ax3.tick_params(which='minor', length=7, direction='in', top=True, right=True)
 # ax3.text(0.87, 4000, '$L$', fontsize=20)
 ax3.text(0.8, 120, '$\delta=4.4$', fontsize=23)
 # ax3.legend(bbox_to_anchor=(0.7, 0.92), loc='upper left', ncol=1, frameon=False, fontsize=16)  # bbox_to_anchor=(0.98, 0.6)
+ax3.text(0.037, 5200, '$(c)$', fontsize=23)
 
 left, bottom, width, height = [0.15, 0.5, 0.4, 0.4]
 inset_ax3 = ax3.inset_axes([left, bottom, width, height])
