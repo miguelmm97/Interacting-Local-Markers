@@ -228,6 +228,120 @@ def local_marker(L_x, x, P, S, site):
 
     return marker
 
+def band_flattening(rho):
+    values, vectors = spectrum(rho)
+    idx = np.min(np.where(values > 0.5)[0])
+    U = np.zeros(rho.shape, dtype=np.complex128)
+    U[:, : idx] = vectors[:, : idx]  # Filling the projector
+    rho_flat = U @ np.conj(np.transpose(U))
+    return rho_flat
+
+
+def QuantileCalc(data, percentage, tol):
+    """
+    Calculates the minimum spreading of a fixed quantile percentage.
+
+    Parameters
+    ----------
+    data : Data pints, rows are the parameters over which the data is calculated, colums are samples
+    percentage: float <1 that indicates the total percentage of the data contained between the quantiles
+    tol: tolerance before convergence
+
+    Returns
+    -------
+    total_quantile_bottom, total_quantile_top: quantiles wit dimensions data[:, 0]
+    """
+
+    total_quantile_bottom = 10 * np.ones((data.shape[0],))
+    total_quantile_top = 10 * np.ones((data.shape[0],))
+
+    for i in range(data.shape[0]):
+
+        # Initial parameters for each parameter point
+        nstep = 25
+        qbottom = 0;
+        qtop = 0
+        diff1 = np.abs(total_quantile_bottom[i] - qbottom)
+        diff2 = np.abs(total_quantile_top[i] - qtop)
+
+        # Iterate until convergence
+        while diff1 > tol and diff2 > tol:
+            q1_vec = np.linspace(0, 1 - percentage, nstep)
+            q2_vec = np.linspace(percentage, 1, nstep)
+            q_diff = 10
+
+            # Minimum spreading of the quantiles
+            for j, (q1, q2) in enumerate(zip(q1_vec, q2_vec)):
+                aux1 = np.quantile(data[i, :], q1)
+                aux2 = np.quantile(data[i, :], q2)
+                if (aux2 - aux1) < q_diff:
+                    q_diff = aux2 - aux1
+                    qbottom = aux1
+                    qtop = aux2
+
+            nstep = nstep * 2
+            diff1 = np.abs(np.abs(total_quantile_bottom[i]) - np.abs(qbottom))
+            diff2 = np.abs(np.abs(total_quantile_top[i]) - np.abs(qtop))
+            total_quantile_bottom[i] = qbottom
+            total_quantile_top[i] = qtop
+
+    return total_quantile_bottom, total_quantile_top
+
+
+def ErrorCalc(data, percentage, n_intervals, tol):
+    """
+    Calculates the minimum spreading of the errors in data.
+
+    Parameters
+    ----------
+    data : Data pints, rows are the parameters over which the data is calculated, colums are samples
+    percentage: float <1 that indicates the total percentage of the data contained between the quantiles
+    tol: tolerance before convergence
+
+    Returns
+    -------
+    total_error_bottom, total_error_top: quantiles wit dimensions data[:, 0]
+    """
+    total_error_bottom = 10 * np.ones((data.shape[0],))
+    total_error_top = 10 * np.ones((data.shape[0],))
+
+    for i in range(data.shape[0]):
+
+        # Sample intervals from the data to calculate the median distribution
+        sample_medians = np.zeros((n_intervals,))
+        for j in range(n_intervals):
+            indexes = np.random.randint(data.shape[1], size=int(data.shape[1] / 2))
+            sample_medians[j] = np.median(data[i, indexes])
+
+        # Convergence to a minimum value
+        nstep = 5;
+        qbottom = 0;
+        qtop = 0
+        diff1 = 10;
+        diff2 = 10
+
+        while diff1 > tol and diff2 > tol:
+            q1_vec = np.linspace(0, 1 - percentage, nstep)
+            q2_vec = np.linspace(percentage, 1, nstep)
+            q_diff = 10
+
+            # Minimum spreading of the quantiles
+            for z, (q1, q2) in enumerate(zip(q1_vec, q2_vec)):
+                aux1 = np.quantile(sample_medians, q1)
+                aux2 = np.quantile(sample_medians, q2)
+                if (aux2 - aux1) < q_diff:
+                    q_diff = aux2 - aux1
+                    qbottom = aux1
+                    qtop = aux2
+
+            nstep = nstep * 2
+            diff1 = np.abs(np.abs(total_error_bottom[i]) - np.abs(qbottom))
+            diff2 = np.abs(np.abs(total_error_top[i]) - np.abs(qtop))
+            total_error_bottom[i] = qbottom
+            total_error_top[i] = qtop
+
+    return total_error_bottom, total_error_top
+
 
 @dataclass
 class XYZ:
@@ -649,6 +763,7 @@ class XYZ:
         return psi_full
 
 
+
     # Class debugging random functions
     def show_basis(self):
 
@@ -869,7 +984,7 @@ class XYZmajorana:
         self.a2rm = a_to_rm             # Update maps between the different bases
         self.rm2a = rm_to_a             # Update maps between the different bases
 
-    def calc_Hamiltonian(self, parity='even', bc='periodic'):
+    def calc_Hamiltonian(self, parity='even', bc='periodic', dis_X=None, dis_Y=None):
         """
         Calculates the Hamiltonian in the even or odd parity sector.
 
@@ -908,8 +1023,16 @@ class XYZmajorana:
         else: raise ValueError('boundary condition must be "periodic" or "open"')
 
         # Disorder realisation
-        disX = self.X * np.random.uniform(0, np.exp(0.5 * self.gamma), size=L)
-        disY = self.Y * np.random.uniform(0, np.exp(-0.5 * self.gamma), size=L)
+        if dis_X is None:
+            disX = self.X * np.random.uniform(0, np.exp(0.5 * self.gamma), size=L)
+        else:
+            disX = dis_X
+
+        if dis_Y is None:
+            disY = self.Y * np.random.uniform(0, np.exp(-0.5 * self.gamma), size=L)
+        else:
+            disY = dis_Y
+
         dis_t = disX + disY
         dis_delta = disX - disY
 
@@ -947,7 +1070,7 @@ class XYZmajorana:
 
         return H
 
-    def calc_sparse_Hamiltonian(self, parity='even', bc='periodic'):
+    def calc_sparse_Hamiltonian(self, parity='even', bc='periodic', dis_X=None, dis_Y=None):
 
         """
         Calculates the sparse Hamiltonian in the even or odd parity sector.
@@ -988,8 +1111,16 @@ class XYZmajorana:
         else: raise ValueError('boundary condition must be "periodic" or "open"')
 
         # Disorder realisation
-        disX = self.X * np.random.uniform(0, np.exp(0.5 * self.gamma), size=L)
-        disY = self.Y * np.random.uniform(0, np.exp(-0.5 * self.gamma), size=L)
+        if dis_X is None:
+            disX = self.X * np.random.uniform(0, np.exp(0.5 * self.gamma), size=L)
+        else:
+            disX = dis_X
+
+        if dis_Y is None:
+            disY = self.Y * np.random.uniform(0, np.exp(-0.5 * self.gamma), size=L)
+        else:
+            disY = dis_Y
+
         dis_t = disX + disY
         dis_delta = disX - disY
 
@@ -1025,7 +1156,7 @@ class XYZmajorana:
                 except TypeError:
                     pass
 
-        return H.tocsr()
+        return H.tocsr(), disX, disY
 
     def calc_opdm_operator(self, parity='even'):
         """
@@ -1138,5 +1269,4 @@ class XYZmajorana:
             psi_full[r_to_a[r]] = psi[r]
 
         return psi_full
-
 

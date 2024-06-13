@@ -329,8 +329,18 @@ def ErrorCalc(data, percentage, n_intervals, tol):
     return total_error_bottom, total_error_top
 
 
+def band_flattening(rho):
+    values, vectors = spectrum(rho)
+    idx = np.min(np.where(values > 0.5)[0])
+    U = np.zeros(rho.shape, dtype=np.complex128)
+    U[:, : idx] = vectors[:, : idx]  # Filling the projector
+    rho_flat = U @ np.conj(np.transpose(U))
+    return rho_flat
 
-
+# for i in range(len(values)):
+#         if values[i] > 0.5:
+#             rho_flat += vectors[:, i] @ np.conj(vectors[:, i].T)
+#     return rho_flat
 
 @dataclass
 class XYZ:

@@ -4,7 +4,7 @@ import time
 from scipy.sparse.linalg import eigsh
 from numpy.linalg import eigh
 import matplotlib.ticker as ticker
-from XYZmajorana_class import XYZmajorana, local_marker, spectrum
+from XYZmajorana_class import XYZmajorana, local_marker, spectrum, band_flattening
 from numpy import pi
 
 start_time = time.time()
@@ -12,11 +12,10 @@ start_time = time.time()
 #%% Parameters
 
 # Parameter space
-# gamma_vec = np.linspace(-8, 8, 80)    # Exponent of the maximum value for the XY couplings
-gamma_vec = [0]
+gamma_vec = np.linspace(-8, 8, 80)    # Exponent of the maximum value for the XY couplings
 X         = 1                         # X coupling
 Y         = 1                         # Y coupling
-Z         = 0                        # Z coupling
+Z         = 10                        # Z coupling
 L         = 12                         # Length of the chain
 
 # Definitions
@@ -52,11 +51,13 @@ for i, gamma in enumerate(gamma_vec):
     # Single-particle density matrix
     rho = chain.calc_opdm_from_psi(GS, parity=parity_gs)
     values = spectrum(rho)[0]
+    rho_flat = band_flattening(rho)
+    
 
     # Local chiral marker
     marker = np.zeros((L,))
     for j in range(L):
-        marker[j] = local_marker(L, np.arange(L), rho, S, j)
+        marker[j] = local_marker(L, np.arange(L), rho_flat, S, j)
     av_marker[i] = np.mean(marker)
 
 print('Time elapsed: {:.2e} s'.format(time.time() - start_time))

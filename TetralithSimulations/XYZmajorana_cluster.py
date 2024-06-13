@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import time
 from scipy.sparse.linalg import eigsh
 from numpy.linalg import eigh
-from XYZmajorana_class import XYZmajorana, local_marker, spectrum
+from XYZmajorana_class import XYZmajorana, local_marker, spectrum, band_flattening
 from numpy import pi
 import argparse
 import h5py
@@ -61,9 +61,9 @@ for i, gamma in enumerate(gamma_vec):
 
     # Hamiltonian
     chain = XYZmajorana(X, Y, Z, gamma, L)
-    Heven = chain.calc_sparse_Hamiltonian(parity='even', bc='periodic')
+    Heven, disX, disY = chain.calc_sparse_Hamiltonian(parity='even', bc='periodic')
     Eeven, psi_even = eigsh(Heven, k=5, which='SA')
-    Hodd = chain.calc_sparse_Hamiltonian(parity='odd', bc='periodic')
+    Hodd = chain.calc_sparse_Hamiltonian(parity='odd', bc='periodic', dis_X=disX, dis_Y=disY)[0]
     Eodd, psi_odd = eigsh(Hodd, k=5, which='SA')
 
     # Select the many-body ground state
@@ -77,11 +77,12 @@ for i, gamma in enumerate(gamma_vec):
     rho = chain.calc_opdm_from_psi(GS, parity=parity_gs)
     rho_gamma[i, :, :] = rho
     values = spectrum(rho)[0]
+    rho_flat = band_flattening(rho)
 
     # Local chiral marker
     marker = np.zeros((L,))
     for j in range(L):
-        marker[j] = local_marker(L, np.arange(L), rho, S, j)
+        marker[j] = local_marker(L, np.arange(L), rho_flat, S, j)
     av_marker[i] = np.mean(marker)
 
 print('Time elapsed: {:.2e} s'.format(time.time() - start_time))
